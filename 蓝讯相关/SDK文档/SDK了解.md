@@ -821,126 +821,534 @@ void func_bt_message(u16 msg)
 
 **所以为什么周期消息是单独处理的，不进入那种switch case语句，可能太费时间。**
 
-## TWS 组队和蓝牙配对过程分析
+## TWS 组队和蓝牙配对灯效分析
 
 在对中科蓝讯 SDK 的二次开发过程中，我们时常需要对 TWS 组队和蓝牙配对功能进行修改，或在此过程中添加功能。
 
-### 灯效显示函数概览
+- 第一，将分析 TWS 组队和蓝牙配对过程，旨在先对 SDK 中的TWS 组队和蓝牙配对有所了解，方便下一步的进行；
 
-- **核心函数**：`func_bt_disp_status()`
-- **作用**：根据不同蓝牙状态（TWS 组队/蓝牙配对的各个阶段），在左右耳机分别调用对应的灯效子函数。
-  - **烧录两版软件，这个不用担心找不到左右耳自己的灯效子函数**
-- **实现方式**：通过 `switch(status)` 结构，每个 `case` 对应一个阶段，由下面的子函数完成具体的红/蓝灯闪烁逻辑
+### 灯效函数分析
 
-### 灯效流程详解
+- **TWS 组队和蓝牙配对灯效函数**`func_bt_disp_status()` 函数将显示 TWS 组队和蓝牙配对各个阶段的灯效，每个阶段的灯效通过该函数 switch 语句中的对应 case 下的灯效函数进行显示，又分主副耳灯效。
 
-1.**首次上电（无程序差异）**
-
-- **显示**：开机灯效。
-- **进入扫描**：状态 `BT_STA_SCANNING`，调用 `led_bt_scan()`，灯效为“300 ms 亮、450 ms 灭”，红蓝交替闪
-
-2.**TWS 组队（双击 USER_DEF 键触发）**
-
-- **并行**：TWS 组队与蓝牙模块开启同时进行
-- **主耳（发起方）**
-  - 调用 `bt_tws_search_slave(15000)`，成功后进入 `BT_STA_IDLE`，调用 `led_bt_idle()`，灯效同扫描阶段（300 ms 亮/450 ms 灭，红蓝交替）。
-  - 播放“组队完成”提示音。
-- **副耳**
-  - 进入 `BT_STA_CONNECTED`，调用 `led_bt_connected()`，“蓝灯亮 100 ms，灭 5 s”
-
-3.**蓝牙配对完成**
-
-- 主、副耳均进入 `BT_STA_CONNECTED`，调用 `led_bt_connected()`，统一“蓝灯亮 100 ms，灭 5 s”
-
-### 功能修改需求
-
-**目标**：在 TWS 组队完成后，先红蓝灯同时亮 1 s，再由主耳单独以 100 ms 频率交替闪烁，副耳熄灯。
-
-**自定义灯效结构体**
+`app\platform\functions\func_bt.c`
 
 ```c
-typedef struct {
-  uint8_t red_pattern;   // 红灯位图（倒序处理）
-  uint8_t blue_pattern;  // 蓝灯位图（倒序处理）
-  uint8_t t1;            // 位间时间 = t1 × 50 ms
-  uint8_t t2;            // 周期间时间 = t2 × 50 ms
-} led_cfg_t;
-```
+AT(.text.bfunc.bt)
+static void func_bt_disp_status(void)
+{
+    uint status = bt_get_disp_status();
 
-例：红蓝同时亮 1 s + 主耳 100 ms 交替闪
-
-```c
-// 倒序后位图：0b01100000 = 0x06
-led_cfg_t cfg = { 0x06, 0x06, 10, 255 };
-```
-
-- 在配置工具中，可通过填写 `{0x00,0x55,10,0}` 等方式定义更多自定义效果
-
-**同步/不同步灯效函数**
-
-- 新增 `led_set_sta_choice(const void *cfg, int sync)`：
-  - `sync = 1`：主、副耳同步闪；
-  - `sync = 0`：分别执行各自灯效
-
-**100 ms 队列消息机制**
-
-- 在消息队列中加入 100 ms 定时消息，用于驱动主耳快速闪烁，副耳保持灭灯
-
-**逻辑实现要点**
-
-- TWS 完成判定：
-
-```c
-if (bt_tws_is_connected() && !tws_connected) {
-  tws_connected = 1;
-  delay_5ms(200);  // 保证红蓝同时亮 1 s
-  led_set_sta_choice(&cfg, bt_tws_is_slave() ? 0 : 1);
+    if(f_bt.disp_status != status) {
+        f_bt.disp_status = status;
+        func_bt_disp_status_do();
+    }
+    func_bt_dac_ctrl();
+    func_bt_tws_bre_led_ctl();
 }
 ```
 
-- 蓝牙配对完成判定
+- 先获取当前蓝牙显示状态 bt_get_disp_status()
+
+- **如果状态有变化**，更新 f_bt.disp_status 并调用 func_bt_disp_status_do()
+
+- 然后分别调用 func_bt_dac_ctrl() 和 func_bt_tws_bre_led_ctl()
+
+#### 关键：func_bt_disp_status_do() 里的灯效处理
+
+- **烧录两版软件，这个不用担心找不到左右耳自己的灯效子函数**
 
 ```c
-if (bt_nor_is_connected()) {
-  // 避免副耳在未配对时误入
+void func_bt_disp_status_do(void)
+{
+    if(!bt_is_connected()) {
+        en_auto_pwroff();
+        sys_cb.sleep_en = BT_PAIR_SLEEP_EN;
+    } else {
+        dis_auto_pwroff();
+        sys_cb.sleep_en = 1;
+    }
+
+    switch (f_bt.disp_status) {
+    case BT_STA_CONNECTING:
+        led_bt_reconnect();
+        break;
+    case BT_STA_INITING:
+    case BT_STA_IDLE:
+        led_bt_idle();
+        // ... 省略 ...
+        break;
+    case BT_STA_SCANNING:
+        led_bt_scan();
+        break;
+    case BT_STA_DISCONNECTING:
+        led_bt_connected();
+        break;
+    case BT_STA_CONNECTED:
+        led_bt_connected();
+        break;
+    case BT_STA_INCOMING:
+        led_bt_ring();
+        break;
+    case BT_STA_PLAYING:
+        led_bt_play();
+        break;
+    case BT_STA_OUTGOING:
+    case BT_STA_INCALL:
+        led_bt_call();
+        break;
+    }
+    // ... 省略 ...
 }
 ```
 
-- 断开重置
+- 这里根据不同的蓝牙状态，调用不同的LED灯效函数（如 led_bt_reconnect()、led_bt_idle()、led_bt_scan()、led_bt_connected() 等）。
+
+- 这些状态包括：正在连接、空闲、扫描、已连接、来电、播放、通话等。
+
+#### TWS组队和配对的灯效
+
+- TWS组队和蓝牙配对的过程，都会导致蓝牙状态的变化（如从“空闲”到“配对/连接/组队”）。
+
+- 这些状态变化会触发 func_bt_disp_status_do()，从而调用不同的LED灯效函数。
+
+- 例如：
+
+  - 配对时，状态可能是 BT_STA_IDLE 或 BT_STA_CONNECTING，对应 led_bt_idle() 或 led_bt_reconnect()。
+
+  - 组队成功后，状态变为 BT_STA_CONNECTED，对应 led_bt_connected()。
+
+#### TWS专用灯效
+
+- func_bt_tws_bre_led_ctl() 也会在 func_bt_disp_status() 里被调用，用于TWS呼吸灯等特殊效果。
+
+- 但具体TWS组队的灯效，通常还是通过状态变化间接实现。
+
+#### 总结
+
+- func_bt_disp_status() 通过状态机机制，间接实现了TWS组队和蓝牙配对各阶段的灯效显示。
+
+- 你可以通过扩展或重载 led_bt_xxx() 相关函数，来实现自定义的组队/配对灯效，而无需修改SDK核心流程。
+
+### 灯效函数流程
+
+1. TWS 组队和蓝牙配对过程在左右耳机都**新下程序**的情况下：
+   - 首次上电左右耳机首先显示**开机灯效**，然后进入 case BT_STA_SCANNING（func_bt_disp_status() 函数中的 case 语句）调用 led_bt_scan() 函数，**TWS 未组队和蓝牙未配对灯效**，亮300ms灭450ms，蓝红交替闪：
+
+2. 双击 USER_DEF 键将进行 TWS 组队：
+   - 在配置工具中开启双击配对
+
+```c
+    ///双击按键处理
+    case KD_PLAY_USER_DEF:
+    case KD_PLAY_PWR_USER_DEF:
+        if (xcfg_cb.user_def_kd_tone_en) {
+            sys_warning_play(T_WARNING_NEXT_TRACK, 1);                  //2击“滴”一声
+        }
+        if ((xcfg_cb.user_def_kd_lang_en) && (!bt_nor_is_connected())) {
+            bt_switch_voice_lang();
+        } else if (user_def_key_msg(xcfg_cb.user_def_kd_sel)) {
+#if BT_TWS_EN
+        } else if(bt_tws_pair_mode(2)) {
+#endif
+        }
+        break;
+
+```
+
+- 注意，此时耳机的蓝牙模块亦同时打开，**即 TWS 组队与蓝牙配对是同时进行的**。
+  - 当 TWS 组队完成，蓝牙未配对，主耳（双击按键一方，最终将调用函数 bt_tws_search_slave(15000) ，然后被判定为主耳）
+    - **烧录两版软件，谁双击开启搜索谁就是主机**
+  - 主机进入 case BT_STA_IDLE 调用 led_bt_idle() 函数，亮300ms灭450ms，蓝红交替闪；并播放 TWS 组队提示音。
+  - 副耳进入 case BT_STA_CONNECTED 调用 led_bt_connected() 函数，蓝灯亮100ms, 灭5S：
+    - 从机已经连接上主机了
+
+3. 当 TWS 组队完成，且蓝牙配对完成，主副耳都进入 case BT_STA_CONNECTED 调用 led_bt_connected() 函数，蓝灯亮100ms, 灭5S。
+   - **这个时候肯定有统一灯效的需求，可能想蓝牙配对之前都是一个灯效，不管TWS是否组队完成**
+
+#### 相关函数
+
+- bt_tws_is_connected() 函数用于**判断 TWS 组队是否完成**；
+
+- bt_nor_is_connected() 函数用于**判断蓝牙配对是否完成**
+
+- 蓝牙断开将进入 `case BT_NOTICE_DISCONNECT`
+
+### 没有连接手机蓝牙之前统一灯效（实现）
+
+#### 背景
+
+- 配置工具中可以设置对耳的连接LED灯效。但是TWS配对成功时，会导致一个耳机处于连接状态（**TWS连接成功了**）一个处于未连接状态（**未连接手机**），从而导致灯效不一致。
+- 正常来讲的话，应该是以连接手机为准，没有连接手机时的灯效一样。
+
+#### 解决方案概述
+
+通过在原有代码基础上增加四个关键部分的逻辑，实现了TWS连接后左右耳机灯效的统一显示**。**
+
+1.**灯效显示逻辑改进（app\platform\functions\func_bt.c）**
+
+**原有逻辑**：
+
+```c
+static void func_bt_disp_status(void)
+{
+    uint status = bt_get_disp_status();
+    
+    if(f_bt.disp_status != status) {
+        f_bt.disp_status = status;
+        func_bt_disp_status_do();
+    }
+    func_bt_dac_ctrl();
+    func_bt_tws_bre_led_ctl();
+}
+```
+
+- 先获取当前蓝牙显示状态 bt_get_disp_status()
+
+- **如果状态有变化**，更新 f_bt.disp_status 并调用 func_bt_disp_status_do()
+
+- 然后分别调用 func_bt_dac_ctrl() 和 func_bt_tws_bre_led_ctl()
+
+**改进逻辑**：
+
+```c
+AT(.text.bfunc.bt)
+static void func_bt_disp_status(void)
+{   
+    //获取当前的蓝牙显示状态
+    uint status = bt_get_disp_status();
+
+#if Y90_UI_EN
+    //静态变量，用于保存上一次的手机蓝牙连接状态
+    static bool nor_connect_disp_sta = 0;
+    //获取当前的手机蓝牙连接状态
+    bool nor_connect_sta = bt_nor_is_connected();
+    //如果当前的蓝牙显示状态与上一次不同，或者当前的手机蓝牙连接状态与上一次不同，则更新灯效
+    if(f_bt.disp_status != status || nor_connect_disp_sta != nor_connect_sta) {
+        //更新手机蓝牙状态
+        nor_connect_disp_sta = nor_connect_sta;
+#else
+    if(f_bt.disp_status != status) {
+#endif
+        //更新蓝牙显示状态
+        f_bt.disp_status = status;
+        //执行灯效显示状态处理
+        func_bt_disp_status_do();
+    }
+    //执行蓝牙DAC控制
+    func_bt_dac_ctrl();
+    //执行蓝牙TWS呼吸灯控制
+    func_bt_tws_bre_led_ctl();
+}
+```
+
+2.**特定状态下的灯效统一（app\platform\functions\func_bt.c）**
+
+**原有逻辑**：
+
+```c
+case BT_STA_IDLE:
+    led_bt_idle();
+    break;
+    
+case BT_STA_CONNECTED:
+    led_bt_connected();
+    break;
+```
+
+- TWS配对但是没有连接手机蓝牙的状态
+  - 主机进入BT_STA_IDLE灯效
+  - 从机进入BT_STA_CONNECTED灯效
+
+**改进逻辑**：
+
+```c
+case BT_STA_IDLE:
+#if FA11_UI_EN
+	//双重保证
+    if(bt_tws_is_connected()) {
+        // TWS已连接但未连接手机时的灯效处理（主耳会进入）
+        if(xcfg_cb.bt_tws_lr_mode == 4) {
+            led_set_sta(0x00,0x60,0x04,0x19);
+        } else if (xcfg_cb.bt_tws_lr_mode == 5) {
+            led_set_sta(0x00,0x60,0x04,0x19);
+        }
+    } else {
+        led_bt_idle();
+    }
+#else
+    led_bt_idle();
+#endif
+    break;
+    
+case BT_STA_CONNECTED:
+#if FA11_UI_EN
+	//这里副耳TWS组队成功后也会进入BT_STA_CONNECTED
+	//主耳连接手机蓝牙后也会进入BT_STA_CONNECTED
+    if(!bt_nor_is_connected()) {
+        // TWS已连接但未连接手机的情况（副耳会进入这个）
+        if(xcfg_cb.bt_tws_lr_mode == 4) {
+            led_set_sta(0x00,0x60,0x04,0x19);
+        } else if (xcfg_cb.bt_tws_lr_mode == 5) {
+            led_set_sta(0x00,0x60,0x04,0x19);
+        }
+        break;
+    }
+#endif
+	//这是主耳会进入的逻辑
+    led_bt_connected();
+    break;
+```
+
+**原本逻辑（未使能 Y90_UI_EN）**
+
+- TWS配对但未连接手机蓝牙时：
+
+- 主机（主耳）会进入BT_STA_IDLE，显示led_bt_idle()灯效。
+
+- 从机（副耳）会进入BT_STA_CONNECTED，显示led_bt_connected()灯效。
+
+- 这样左右耳在未连接手机蓝牙前，灯效是不一样的。
+
+**修改后逻辑**
+
+- 只要TWS已连接，且bt_tws_lr_mode为4或5：
+  - 无论主机还是从机，只要处于BT_STA_IDLE、BT_STA_INITING、BT_STA_CONNECTED，且没有连接手机蓝牙（!bt_nor_is_connected()），都会统一调用led_set_sta(0x00,0x60,0x04,0x19)。
+
+- 也就是说，只要TWS配对成功但还没连手机蓝牙，左右耳都会显示同一个灯效（即led_set_sta(0x00,0x60,0x04,0x19)）。
+
+**3.强制更新灯效显示（app\platform\bsp\bsp_bt.c）**
+
+**0xff的意义**
+
+```c
+void func_bt_status(void)
+{
+    while(1) {
+        func_bt_disp_status();
+
+        {
+            func_bt_warning();
+        }
+
+        if(f_bt.disp_status != 0xff) {
+            break;
+        }
+    }
+}
+```
+
+- 这个函数是蓝牙主循环的一部分。
+
+- 每次循环都会调用func_bt_disp_status()和func_bt_warning()。
+
+- 只有当f_bt.disp_status != 0xff时，才会跳出循环，否则会一直循环。
+  - func_bt_disp_status中状态发生变化时就会更新灯效。
+
+**f_bt.disp_status = 0xff的意义**
+
+- 0xff通常是一个无效/未初始化的状态，用来标记“需要重新获取和刷新状态”。
+
+- 当某些情况下（比如休眠、异常、状态切换等），代码会把f_bt.disp_status设为0xff，表示“当前状态未知，需要强制刷新”。
+
+**为什么会触发灯效更新？**
+
+- 当f_bt.disp_status = 0xff时，下一次func_bt_disp_status()执行时：
+
+- 会重新获取当前的蓝牙状态status。
+
+- 由于f_bt.disp_status（0xff）和实际的status一定不同，所以会进入更新分支，调用func_bt_disp_status_do()，刷新灯效。
+
+- 这样可以保证在状态不明或需要强制刷新的情况下，灯效能及时、准确地反映当前蓝牙状态。
+
+**原有逻辑**：
 
 ```c
 case BT_NOTICE_DISCONNECT:
-  tws_connected = 1;  // 重新进入主耳快速闪烁模式
-  break;
+    bt_emit_notice_disconnect((u8 *)param);
+    break;
+
+case BT_NOTICE_CONNECTED:
+    bt_emit_notice_connected((u8 *)param);
+    break;
+
+case BT_NOTICE_TWS_DISCONNECT:
+    f_bt.tws_status &= ~0xc0;
+    f_bt.warning_status |= BT_WARN_TWS_DISCON;
+    break;
+
+case BT_NOTICE_TWS_CONNECTED:
+    bt_emit_notice_tws_connected((u8 *)param);
+    break;
 ```
 
-#### 按“先 TWS，后配对”顺序的蓝牙流程调整
-
-1.关闭上电自动回连
+**改进逻辑**：
 
 ```c
-bt_set_reconnect_times(0);
+case BT_NOTICE_DISCONNECT:
+    bt_emit_notice_disconnect((u8 *)param);
+#if FA11_UI_EN
+    // 蓝牙断开连接时，强制更新灯效显示
+    f_bt.disp_status = 0xff;
+#endif
+    break;
+
+case BT_NOTICE_CONNECTED:
+    bt_emit_notice_connected((u8 *)param);
+#if FA11_UI_EN
+    // 蓝牙连接成功时，强制更新灯效显示
+    f_bt.disp_status = 0xff;
+#endif
+    break;
+
+case BT_NOTICE_TWS_DISCONNECT:
+    f_bt.tws_status &= ~0xc0;
+    f_bt.warning_status |= BT_WARN_TWS_DISCON;
+#if FA11_UI_EN
+    // TWS断开连接时，强制更新灯效显示
+    f_bt.disp_status = 0xff;
+#endif
+    break;
+
+case BT_NOTICE_TWS_CONNECTED:
+    bt_emit_notice_tws_connected((u8 *)param);
+#if FA11_UI_EN
+    // TWS连接成功时，强制更新灯效显示
+    f_bt.disp_status = 0xff;
+#endif
+    break;
 ```
 
-- 防止组队后立即回连手机
+**改进说明**：
 
-2.初始不可被发现
+- 在四个关键的蓝牙状态变化事件中添加了强制更新灯效的代码
+- 通过设置`f_bt.disp_status = 0xff`（无效值），强制在下一次调用func_bt_disp_status函数时更新灯效
+- 这确保了在状态变化时，左右耳机都会更新灯效，保持一致
 
-```c
-bt_set_scan(0x00);  // 不可发现
-```
+**函数名：bt_emit_notice**
 
-- 延迟至组队超时后再开放扫描
+- 这是一个蓝牙事件通知处理函数，用于响应蓝牙协议栈/驱动层发出的各种事件（如连接、断开、TWS连接/断开等）。
 
-3.计时控制
+- 其作用是：当蓝牙底层发生关键事件时，通知上层做出相应处理，比如更新状态、刷新灯效、同步数据等。
 
-- 在 `sys_cb` 中新增 `tws_connect_start` 记录组队开始时钟。
+**事件类型举例**
 
-- 在 `msg_bt.c` 中检测：
+- BT_NOTICE_INIT_FINISH：蓝牙初始化完成
 
-  - 若超过 5 s，允许回连或可见；
+- BT_NOTICE_DISCONNECT：蓝牙断开
 
-  - 若超过 10 s 且无配对记录，调用 `bt_set_scan(0x03)` 开放扫描
+- BT_NOTICE_CONNECTED：蓝牙连接
+
+- BT_NOTICE_TWS_DISCONNECT：TWS断开
+
+- BT_NOTICE_TWS_CONNECTED：TWS连接
+
+- ...（还有其他事件）
+
+#### 为什么在这里赋值f_bt.disp_status = 0xff？
+
+**作用**
+
+- 赋值f_bt.disp_status = 0xff的目的是强制让上层的显示/灯效逻辑在收到这些关键事件后，立即刷新一次。
+
+- 这是因为：
+
+  - 蓝牙底层的事件变化有时不会直接改变f_bt.disp_status，而是通过事件通知机制让上层感知。
+
+  - 如果不强制刷新，可能会出现状态已经变化但灯效没变的情况，导致用户体验不一致。
+
+**具体流程**
+
+1. 蓝牙底层发生事件（如断开、连接、TWS变化等）。
+
+2. 调用bt_emit_notice，进入对应的case分支。
+
+3. 在#if FA11_UI_EN下，赋值f_bt.disp_status = 0xff。
+
+4. 上层主循环（如func_bt_status）检测到f_bt.disp_status == 0xff，会强制刷新一次灯效和显示状态。
+
+#### “各状态变化不是原本就有吗？”——为什么还要这样做？
+
+- 原本的状态变化（比如func_bt_disp_status里根据bt_get_disp_status()自动切换）是定期轮询的。
+
+- 但有些底层事件（比如TWS断开、TWS连接、蓝牙断开等）是异步发生的，可能不会立刻被上层感知。
+
+- 通过事件通知+强制刷新，可以保证所有关键状态变化都能第一时间反映到灯效和UI上，避免遗漏。
+
+#### 方案工作原理
+
+1. **全面的状态检测**：不仅检测蓝牙状态变化，还检测手机连接状态变化，确保在任何状态变化时都能更新灯效
+2. **统一的灯效参数**：在TWS连接的情况下，为左右耳机设置相同的灯效参数，确保视觉一致性
+3. **强制更新机制**：在关键状态变化点强制更新灯效显示，避免因状态不同步导致的灯效不一致
+
+#### 原始灯效与改进后灯效的区别
+
+##### 原始灯效行为
+
+在原始SDK中，TWS耳机的灯效显示完全基于每个耳机自身的状态，导致以下情况：
+
+1. TWS配对阶段：
+   - 两只耳机都显示配对/搜索状态的灯效（通常是快速闪烁）
+2. TWS连接成功但未连接手机阶段：
+   - **主耳机**：显示为"已连接TWS但未连接手机"的状态，通常是某种特定的闪烁模式
+   - **从耳机**：显示为"已连接"状态，因为从耳机视角它已经连接到了主耳机
+   - **结果**：两只耳机显示不同的灯效，用户会看到不一致的视觉反馈
+3. 连接手机阶段：
+   - 只有主耳机与手机建立连接
+   - **主耳机**：显示为"已连接手机"的状态
+   - **从耳机**：仍然只显示"已连接TWS"的状态
+   - **结果**：两只耳机可能仍然显示不同的灯效
+4. 完全连接阶段：
+   - 当主耳机成功与手机连接，并且信息同步到从耳机后
+   - 两只耳机才会显示相同的"已连接"状态灯效
+5. 休眠影响：
+   - 在某些状态下，一只耳机可能进入休眠模式而关闭LED灯，而另一只保持活跃状态
+   - 这进一步加剧了灯效的不一致性
+
+##### 改进后灯效行为
+
+改进后的方案通过多种机制确保TWS耳机在各个阶段都显示一致的灯效：
+
+1. TWS配对阶段：
+   - 与原来相同，两只耳机都显示配对/搜索状态的灯效
+2. TWS连接成功但未连接手机阶段：
+   - **关键改进点**：无论主从耳机，都显示相同的统一灯效
+   - 通过`led_set_sta(0x00,0x60,0x04,0x19)`设置特定的灯效参数
+   - 两只耳机显示完全相同的灯效，提供一致的视觉反馈
+3. 连接手机阶段：
+   - **关键改进点**：强制更新机制确保状态变化时两只耳机同步更新灯效
+   - 通过设置`f_bt.disp_status = 0xff`触发灯效更新
+   - 两只耳机显示相同的"已连接手机"状态灯效
+4. 完全连接阶段：
+   - 两只耳机显示相同的"已连接"状态灯效，与原来相同
+
+##### 具体灯效差异示例
+
+##### 场景一：TWS连接成功但未连接手机
+
+**原始行为**：
+
+- 主耳机：可能显示蓝灯慢闪（表示待连接状态）
+- 从耳机：可能显示蓝灯常亮或特定模式闪烁（表示已连接状态）
+- 用户体验：看到两只耳机灯光不同，可能误以为有一只耳机出现问题
+
+**改进后行为**：
+
+- 主耳机和从耳机：都显示相同的灯效模式（由`led_set_sta(0x00,0x60,0x04,0x19)`设置）
+- 用户体验：看到两只耳机灯光一致，理解为TWS已连接但等待连接手机的状态
+
+##### 场景二：主耳机连接手机过程中
+
+**原始行为**：
+
+- 主耳机：可能显示蓝灯快闪（表示正在连接状态）
+- 从耳机：可能仍显示之前的状态灯效
+- 用户体验：看到不同步的灯效变化，感到困惑
+
+**改进后行为**：
+
+- 通过强制更新机制，两只耳机同步更新灯效状态
+- 用户体验：看到两只耳机同步变化的灯效，理解为系统正在连接手机
 
 ## TWS左右声道分配
 
@@ -1043,127 +1451,3 @@ u8 bt_addr[6];                              //蓝牙地址
 除了前面提到的基础充电配置，实际上对于充电有时候会有其他的控制需求，在耳机中的体现就是 NTC 功能，**根据充电环境的温度，去控制充电达到保护电池延长电池使用的目的**。通常通过 ADC 功能去采集热敏电阻的电压，换算得到相应的温度值，实现比较简单，**只要得出 ADC 值对应的温度列表就可以实现**，这里主要讲充电的调整控制部分，例如在某温度下需要对充电电流进行调控，通常采用的实现方式如下，实际上就是先停止充电，在修改恒流充电的电流配置在重新初始化进行充电。
 
 - **检测到温度过高后，把充电电流改小降低发热？**
-
-# 灯效复制
-
-哈喽，大家好。在对中科蓝讯 SDK 的二次开发过程中，我们时常需要对 TWS 组队和蓝牙配对功能进行修改，或在此过程中添加功能。下面我将从两个大方面对此进行分享。第一，将分析 TWS 组队和蓝牙配对过程，旨在先对 SDK 中的TWS 组队和蓝牙配对有所了解，方便下一步的进行；第二，将列举此过程两个功能的修改或添加。
-
-https://www.sunsili.com/html/support/specialtopic/207.html
-
-一、TWS 组队和蓝牙配对过程灯效分析
-
-
-
-1、准备工作A）接线准备：
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图1)](./SDK了解.assets/232316fecmca2e9mm1h9mm.png)
-
-B）打印信息输出 IO 更改为PA7：
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图2)](./SDK了解.assets/232316zpjufc4ecncpfpjw.png)
-
-C）配置工具配置准备：
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图3)](./SDK了解.assets/232316t91kf1911f1n1a97.png)
-
-2、TWS 组队和蓝牙配对灯效函数func_bt_disp_status() 函数将显示 TWS 组队和蓝牙配对各个阶段的灯效，每个阶段的灯效通过该函数 switch 语句中的对应 case 下的灯效函数进行显示，又分主副耳灯效。
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图4)](./SDK了解.assets/232316bldneymnxynlksap.png)
-
-3、TWS 组队和蓝牙配对过程在左右耳机都新下程序的情况下，首次上电左右耳机首先显示开机灯效，然后进入 case BT_STA_SCANNING（func_bt_disp_status() 函数中的 case 语句）调用 led_bt_scan() 函数，TWS 未组队和蓝牙未配对灯效，亮300ms灭450ms，蓝红交替闪：
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图5)](./SDK了解.assets/232316uvyt96a499k67k9f.png)
-
-双击 USER_DEF 键将进行 TWS 组队：
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图6)](./SDK了解.assets/232316yqgc1qf8qu2of1y8.png)
-
-注意，此时耳机的蓝牙模块亦同时打开，即 TWS 组队与蓝牙配对是同时进行的。当 TWS 组队完成，蓝牙未配对，主耳（双击按键一方，最终将调用函数 bt_tws_search_slave(15000) ，然后被判定为主耳）进入 case BT_STA_IDLE 调用 led_bt_idle() 函数，亮300ms灭450ms，蓝红交替闪；并播放 TWS 组队提示音。副耳进入 case BT_STA_CONNECTED 调用 led_bt_connected() 函数，蓝灯亮100ms, 灭5S：
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图7)](./SDK了解.assets/232316aw593wnnl9li8ml4.png)
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图8)](./SDK了解.assets/232316baxzu4zsxm9r41sy.png)
-
-当 TWS 组队完成，且蓝牙配对完成，主副耳都进入 case BT_STA_CONNECTED 调用 led_bt_connected() 函数，蓝灯亮100ms, 灭5S。
-
-二、TWS 组队和蓝牙配对过程功能修改1、TWS 组队完成主副耳红蓝灯亮一秒后，副耳熄灭，主耳 100ms 闪烁A）自定义红蓝灯亮 1s 和 100ms 闪烁结构体（配置工具中没有的灯效）：
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图9)](./SDK了解.assets/232316n9h99edskbbo3ehs.png)
-
-第一个 0x06 将以 0110 0000 倒序来控制红灯亮灭（0：灭，1：亮）；第二个 0x06 将以0110 0000 倒序来控制蓝灯亮灭；10 指两个二进制位间的时间是 10*50ms；255 指两个字节间的时间间隔是无限长，它的时间单位同样是 50ms。SDK已定义的灯效可通过配置工具来修改，如下开机状态配置 LED：
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图10)](./SDK了解.assets/232316wpwz1yhvzo9y97g7.png)
-
-t1 是指两颗 LED 之间闪烁的间隔（上图即为 10*50ms）；每 8 颗 LED 可以看做是一个周期，写成代码即对应 8 个二进制位；t2 是指两个周期之间的间隔（上图即为 0*50ms）。上图红灯全部熄灭，对应二进制数：0000 0000，若写成灯效结构体须倒序，倒序后值没有变化；蓝灯灯效对应二进制数：1010 1010，但若写成灯效结构体须先倒序为：0101 0101 ，因此，上图若写成灯效结构体其各个成员值为：{0x00,0x55,10,0}。B）新建使主副耳灯效同步的灯效函数：
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图11)](./SDK了解.assets/232316fjz8t28udsp5kva2.png)
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图12)](./SDK了解.assets/232316g7mxrzgttnm00xi5.png)
-
-
-
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图13)](http://bbs.sunsili.com/data/attachment/forum/202212/12/232316lmlb11rqrsb8wr0p.png)
-
-led_set_sta_choice(const void *cfg,int cnt) 函数是自定义函数，其中，cfg 是灯效结构体指针；cnt 为真，主副耳的灯效将同步，为假，则不同步。
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图14)](./SDK了解.assets/232316s3p82d3dr2n8nav0.png)
-
-bt_tws_is_slave() 用于判断是否是副耳。C）增加 100ms 队列消息：
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图15)](./SDK了解.assets/232316clp5ppy1m7hr6ydf.png)
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图16)](./SDK了解.assets/232316c7nzybown7j6a80z.png)
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图17)](./SDK了解.assets/232316nfzxe2dy7dnxqzx7.png)
-
-D）灯效实现：
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图18)](./SDK了解.assets/232316mgccmg4mxgctbnnt.png)
-
-bt_tws_is_connected() 函数用于判断 TWS 组队是否完成；tws_connected 是全局变量，做自加是避免两次进入 case BT_STA_IDLE 重复跑灯效函数，并作为主耳 100ms 红蓝灯交替闪烁的标记位；delay_5ms(200) 保证红蓝灯亮一秒而不被覆盖。
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图19)](./SDK了解.assets/232316z50n5njetwgawuze.png)
-
-bt_nor_is_connected() 函数用于判断蓝牙配对是否完成，此处为防止副耳在完成 TWS 组队但未完成蓝牙配对的情况下跑此灯效。
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图20)](./SDK了解.assets/232316xsvft060za7f1vjq.png)
-
-在 100ms 队列消息中使主耳 100ms 红蓝灯交替闪烁，副耳保持熄灯状态。
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图21)](./SDK了解.assets/232316jknrbb2yy4kx3dyl.png)
-
-蓝牙断开将进入 case BT_NOTICE_DISCONNECT，令 tws_connected = 1 可使耳机进入主耳 100ms 红蓝灯交替闪烁副耳熄灭的蓝牙配对灯效。
-
-- 先进行 TWS 组队再进行蓝牙配对
-
-A）设置上电回连手机次数为 0 次：
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图22)](./SDK了解.assets/232316d3fk22o0dq2t22w2.png)
-
-B）蓝牙初始化完成后设置不可被发现：
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图23)](./SDK了解.assets/232316epfv89v9z7ll89w9.png)
-
-bt_set_scan() 函数的参数为 0x00 时，可以设置耳机蓝牙不被发现。C）进入 FUNC_ BT 前获取当前时钟：
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图24)](./SDK了解.assets/232316f1hauw5611d1wh4k.png)
-
-在 sys_cb 中增加变量 tws_connect_start 用以记录时间；
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图25)](http://bbs.sunsili.com/data/attachment/forum/202212/12/232316hl80z4z4bij93b4y.png)
-
-双击按键开始 TWS 组队，则记录下开始组队的时刻；
-
-D）msg_bt.c 文件里面判断计时是否到 10S，到5S 后设置回连或者可被手机发现：
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图26)](./SDK了解.assets/232316hcm9js9jjj28jij8.png)
-
-tick_check_expire() 函数用于判断记录的组队时刻开始到现在是否有 10s；bt_nor_get_link_info(NULL) 判断是否有蓝牙配对信息；bt_set_scan() 函数的参数为 0x03 时，耳机蓝牙可被发现、可被连接。
-
-E）如 10s 内 TWS 配上对设置可被发现或者回连手机：
-
-![中科蓝讯SDK TWS 组队和蓝牙配对过程分析(图27)](./SDK了解.assets/232316owwvo1vy0w1f2w10.png)
-
-内容介绍到这里，欢迎大家批评指正。对于其他的组队以及配对的功能，可以借鉴上面几个点去延伸，如果大家还有什么其他的问题或者功能想要询问，亦可以在评论区中提出，可以共同探讨，一起进步。
-
