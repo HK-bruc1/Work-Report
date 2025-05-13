@@ -1,3 +1,7 @@
+# 文档说明
+
+此文档表述与理论基本来自AI代码分析工具，有一些流程和理论暂时没有在生产环境中得到验证，此后会根据实际实践经验不断完善表述和纠正错误。
+
 # 替换提示音
 
 为了方便知道耳机的状态，把所有的音效改成中文。
@@ -13,6 +17,49 @@
 3. 然后点击打开选中即可
 4. 格式跟原来一样，点击保存提示音文件
 5. 再点击保存到bin即可编译生效。
+
+## 区分左右耳
+
+**区分左右耳的话，出包需要分开编译分别打包各自的ufw文件：**
+
+**apps\earphone\include\app_config.h**
+
+```c
+/* 声道确定方式选择 */
+#define CONFIG_TWS_MASTER_AS_LEFT             0 //主机作为左耳
+#define CONFIG_TWS_AS_LEFT_CHANNEL            1 //固定左耳
+#define CONFIG_TWS_AS_RIGHT_CHANNEL           2 //固定右耳
+#define CONFIG_TWS_LEFT_START_PAIR            3 //双击发起配对的耳机做左耳
+#define CONFIG_TWS_RIGHT_START_PAIR           4 //双击发起配对的耳机做右耳
+#define CONFIG_TWS_EXTERN_UP_AS_LEFT          5 //外部有上拉电阻作为左耳
+#define CONFIG_TWS_EXTERN_DOWN_AS_LEFT        6 //外部有下拉电阻作为左耳
+#define CONFIG_TWS_SECECT_BY_CHARGESTORE      7 //充电仓决定左右耳
+#define CONFIG_TWS_CHANNEL_SELECT             CONFIG_TWS_AS_LEFT_CHANNEL //配对方式选择
+```
+
+**左右耳分别切换宏编译出包。**
+
+格式支持要做好，不要的格式就不启用，免得占用资源：
+
+apps\earphone\board\br30\board_ad697n_demo_cfg.h
+
+`TCFG_BT_SUPPORT_G729` 用于控制 G.729 格式（即 WTG）的支持：
+
+- 置为 `1` 时开启 G.729（WTG）格式解码支持；
+- 置为 `0` 时关闭此支持。
+
+`TCFG_DEC_WTGV2_ENABLE` 用于控制 WTS 格式的支持：
+
+- 置为 `1` 时开启 WTS 格式解码支持；
+- 置为 `0` 时关闭此支持。
+
+## 出包
+
+在左耳文件夹中更新表格，并重命名新的包含校验码和修改时间的文件名。
+
+使用**烧写文件授权工具**可以查看大写的校验码，使用校验码查看工具可以看到小写的校验码。
+
+分别打包压缩发出即可。
 
 # 日志与打印输出
 
