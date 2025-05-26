@@ -41,7 +41,7 @@
 
 格式支持要做好，不要的格式就不启用，免得占用资源：
 
-apps\earphone\board\br30\board_ad697n_demo_cfg.h
+`apps\earphone\board\br30\board_ad697n_demo_cfg.h`
 
 `TCFG_BT_SUPPORT_G729` 用于控制 G.729 格式（即 WTG）的支持：
 
@@ -52,6 +52,8 @@ apps\earphone\board\br30\board_ad697n_demo_cfg.h
 
 - 置为 `1` 时开启 WTS 格式解码支持；
 - 置为 `0` 时关闭此支持。
+
+**格式对不上的话，烧录进入是完全没有提示音的。**
 
 ## 出包
 
