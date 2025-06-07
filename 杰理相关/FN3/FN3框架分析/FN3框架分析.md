@@ -66,6 +66,17 @@
 
 # 日志与打印输出
 
+**首先保证板级文件中的配置以及模式使能了**
+
+```c
+//                                 UART配置                                        //
+//*********************************************************************************//
+#define TCFG_UART0_ENABLE				    ENABLE_THIS_MOUDLE                     //串口打印模块使能
+#define TCFG_UART0_RX_PORT					NO_CONFIG_PORT                         //串口接收脚配置（用于打印可以选择NO_CONFIG_PORT）
+#define TCFG_UART0_TX_PORT  				IO_PORT_DP                             //串口发送脚配置
+#define TCFG_UART0_BAUDRATE  				1000000                                //串口波特率配置
+```
+
 打开打印总开关：`apps\earphone\include\app_config.h`
 
 ```c
@@ -200,6 +211,19 @@ void test_function(void)
 - log_error() - 错误日志
 
 ## 彩色打印(不会)
+
+`include_lib\system\generic\log.h`
+
+```c
+#define r_printf(x, ...)    log_i("\e[31m\e[1m" x "\e[0m", ## __VA_ARGS__)
+#define g_printf(x, ...)    log_i("\e[32m\e[1m" x "\e[0m", ## __VA_ARGS__)
+#define y_printf(x, ...)    log_i("\e[33m\e[1m" x "\e[0m", ## __VA_ARGS__)
+#define r_f_printf(x, ...)  log_i("\e[31m\e[5m\e[1m" x "\e[0m", ## __VA_ARGS__)
+#define g_f_printf(x, ...)  log_i("\e[32m\e[5m\e[1m" x "\e[0m", ## __VA_ARGS__)
+#define y_f_printf(x, ...)  log_i("\e[33m\e[5m\e[1m" x "\e[0m", ## __VA_ARGS__)
+```
+
+把`log_i`改用`printf`即可
 
 # SDK的启动流程
 
