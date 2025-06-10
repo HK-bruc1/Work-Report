@@ -1,10 +1,12 @@
 # 打开对应宏
 
-在`appsearphoneboardbr36board_ac700n_demo_cfg.h`板级文件中打开宏
+在`apps\earphone\board\br36\board_ac700n_demo_cfg.h`板级文件中打开宏
 
 ![1f3a407969de52e6a35b58e2c3a6117](./打开在线调试EQ并出tools包.assets/1f3a407969de52e6a35b58e2c3a6117.png)
 
 # 修改声道选择
+
+`apps\earphone\include\app_config.h`
 
 ```c
 /* 声道确定方式选择 */
