@@ -36,3 +36,51 @@ git fetch --all
 - `origin/feature/xxx`
 
 但你本地的实际分支（如 `main`, `dev` 等）不会被修改。
+
+# 撤销本地提交
+
+我本地领先远程两个提交，现在这两个领先的提交我想丢弃掉
+
+## 先fetch再reset
+
+为了确保远程信息是最新的：
+
+```bash
+# 获取最新的远程信息
+git fetch origin
+
+# 重置到远程分支
+git reset --hard origin/main
+```
+
+### 验证结果
+
+执行后可以检查状态：
+
+```bash
+# 查看当前状态
+git status
+
+# 查看提交历史
+git log --oneline -5
+```
+
+你应该看到类似这样的输出：
+
+```bash
+Your branch is up to date with 'origin/main'.
+nothing to commit, working tree clean
+```
+
+### 注意事项
+
+- `--hard` 参数会**完全删除**这两个提交的所有更改，包括工作区的修改
+- 如果你想保留这些更改到工作区，可以使用 `--mixed`（默认）或 `--soft`
+- 执行前确保没有重要的未保存工作
+- 如果需要，可以先创建一个备份分支：`git branch backup-branch`
+
+这样操作后，你的本地分支就会与远程分支完全同步，那两个领先的提交会被丢弃。
+
+## 使用undo commit
+
+可以把最新的本地提交撤销，所有更改都暂存在工作区中，提交信息也在输入框。
