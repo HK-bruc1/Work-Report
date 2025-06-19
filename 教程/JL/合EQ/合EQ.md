@@ -56,9 +56,13 @@ EQ的功能不仅限于音乐播放，还在其他场景中发挥重要作用：
 
 ![image-20250515193328117](./合EQ.assets/image-20250515193328117.png)
 
+- 选好芯片类型
+
+![image-20250619193917469](./合EQ.assets/image-20250619193917469.png)
+
 **根据ANC是否打开，选择full或者less文件进行修改。修改之后保存到bin文件即可。**
 
-![image-20250515193654000](./合EQ.assets/image-20250515193654000.png)
+![image-20250619194011752](./合EQ.assets/image-20250619194011752.png)
 
 ### 调整音乐EQ也在此
 
@@ -79,6 +83,28 @@ EQ的功能不仅限于音乐播放，还在其他场景中发挥重要作用：
 ![image-20250515194509044](./合EQ.assets/image-20250515194509044.png)
 
 **比较与上一次的校验码的差异可以知道是否编译成功。**
+
+## (校验码不变的情况)硬编码EQ
+
+不管是不是ANC的直接同名替换两个eq文件，代码会自动应用其中一个。
+
+如果校验码还是没有变的话，就使用eq工具，选对芯片型号，获取eq文件的数值。代码填充对应的数值即可。
+
+`cpu\br36\audio\eq_config.c`
+
+修改这个数组`eq_tab_normal`
+
+总增益数值修改这里：
+
+```c
+const EQ_CFG_SEG *eq_type_tab[EQ_MODE_MAX] = {
+    eq_tab_normal, eq_tab_rock, eq_tab_pop, eq_tab_classic, eq_tab_jazz, eq_tab_country, eq_tab_custom
+};
+// 默认系数表，每个表对应的总增益,用户可修改
+float type_gain_tab[EQ_MODE_MAX] = {-1, -2, 0, 0, 0, 0, 0};
+```
+
+
 
 # 可视化
 
