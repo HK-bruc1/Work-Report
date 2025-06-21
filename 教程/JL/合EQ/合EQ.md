@@ -94,6 +94,8 @@ EQ的功能不仅限于音乐播放，还在其他场景中发挥重要作用：
 
 修改这个数组`eq_tab_normal`
 
+- 这里是默认的音乐eq
+
 总增益数值修改这里：
 
 ```c
@@ -104,7 +106,46 @@ const EQ_CFG_SEG *eq_type_tab[EQ_MODE_MAX] = {
 float type_gain_tab[EQ_MODE_MAX] = {-1, -2, 0, 0, 0, 0, 0};
 ```
 
+## 其他风格的音乐EQ
 
+![image-20250620093654656](./合EQ.assets/image-20250620093654656.png)
+
+- 这个不是这么使用的，只是作为备份
+
+![image-20250620093705363](./合EQ.assets/image-20250620093705363.png)
+
+### 同名替换还是使用工具读取数值修改数组？
+
+后者。
+
+### bass修改那一个数组？
+
+```c
+case ONE_KEY_CTL_THREE:
+        if (channel == 'L') {
+            bt_set_low_latency_mode(!bt_get_low_latency_mode());
+        } else if (channel == 'R') {
+            // anc_mode_next();
+            // bt_set_low_latency_mode(!bt_get_low_latency_mode());
+            if(eq_switch_flag) {
+                tone_play_index(IDEX_TONE_NORMAL_EQ,1);
+                eq_mode_set(EQ_MODE_NORMAL);
+            } else {
+                tone_play_index(IDEX_TONE_BASS_EQ,1);
+                eq_mode_set(EQ_MODE_ROCK);
+            }
+            eq_switch_flag = !eq_switch_flag;
+            // update_anc_voice_key_opt();
+        }else{
+            bt_set_low_latency_mode(!bt_get_low_latency_mode());
+            // anc_mode_next(); 
+        }
+        break;
+```
+
+音乐风格在NORMAL和ROCK之间切换。
+
+`eq_switch_flag`是文件开头定义的全局变量
 
 # 可视化
 
