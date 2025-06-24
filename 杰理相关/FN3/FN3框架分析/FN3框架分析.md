@@ -210,7 +210,7 @@ void test_function(void)
 
 - log_error() - 错误日志
 
-## 彩色打印(不会)
+## 彩色打印
 
 `include_lib\system\generic\log.h`
 

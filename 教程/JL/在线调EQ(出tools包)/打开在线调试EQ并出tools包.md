@@ -4,6 +4,8 @@
 
 ![1f3a407969de52e6a35b58e2c3a6117](./打开在线调试EQ并出tools包.assets/1f3a407969de52e6a35b58e2c3a6117.png)
 
+有一些SDK不一样，但是核心是开EQ总使能，找到在线EQ调试打开，后面有对应的宏说明
+
 # 修改声道选择
 
 `apps\earphone\include\app_config.h`
