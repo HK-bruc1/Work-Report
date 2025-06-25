@@ -23,4 +23,18 @@
 #define CONFIG_TWS_CHANNEL_SELECT             CONFIG_TWS_MASTER_AS_LEFT//CONFIG_TWS_AS_LEFT_CHANNEL //配对方式选择
 ```
 
-# 打包TOOLS包
+# 编译打包TOOLS包
+
+![image-20250625163809376](./打开在线调试EQ并出tools包.assets/image-20250625163809376.png)
+
+# 问题
+
+`apps\earphone\include\app_config.h`这个不打开的话，编译会失败
+
+```c
+#define USB_PC_NO_APP_MODE                        1
+```
+
+![image-20250625175531936](./打开在线调试EQ并出tools包.assets/image-20250625175531936.png)
+
+**不是SPP进不去界面。**
