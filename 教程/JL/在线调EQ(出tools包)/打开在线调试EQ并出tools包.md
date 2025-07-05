@@ -6,6 +6,10 @@
 
 有一些SDK不一样，但是核心是开EQ总使能，找到在线EQ调试打开，后面有对应的宏说明
 
+其他SDK：
+
+![image-20250705143311195](./打开在线调试EQ并出tools包.assets/image-20250705143311195.png)
+
 # 修改声道选择
 
 `apps\earphone\include\app_config.h`
@@ -24,6 +28,8 @@
 ```
 
 # 编译打包TOOLS包
+
+- 因为tools包中有配置工具和升级文件。
 
 ![image-20250625163809376](./打开在线调试EQ并出tools包.assets/image-20250625163809376.png)
 
