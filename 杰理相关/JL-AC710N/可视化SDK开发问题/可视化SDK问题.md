@@ -847,3 +847,24 @@ static int get_pipeline_uuid(const char *name)
 }
 ```
 
+# 硬件配置
+
+## 资料
+
+![image-20250715145036071](./可视化SDK问题.assets/image-20250715145036071.png)
+
+## MIC配置
+
+![image-20250715143755665](./可视化SDK问题.assets/image-20250715143755665.png)
+
+DAC与ADC记忆：
+
+- DAC是数字信号转为电压（声音）**喇叭**
+  - D喇叭
+- ADC是电压（声音）转为数字信号  **麦克风**
+
+## LED配置
+
+- 数据手册要对的上芯片型号
+
+![image-20250715145819250](./可视化SDK问题.assets/image-20250715145819250.png)
