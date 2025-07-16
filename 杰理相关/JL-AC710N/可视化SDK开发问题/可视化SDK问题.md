@@ -42,6 +42,33 @@ char channel = tws_api_get_local_channel();
 
 `apps\earphone\mode\bt\bt_key_msg_table.c`的`bt_key_power_msg_remap`
 
+## 按键相关的参数
+
+### 长按相关的参数
+
+`interface\driver\cpu\periph\lp_touch_key_common.h`
+
+```c
+#define LP_TOUCH_KEY_PLATFORM_DATA_END() \
+    .ldo_wkp_algo_reset = 1,\
+    .charge_enter_algo_reset = 0,\
+    .charge_exit_algo_reset = 1,\
+    .charge_online_algo_reset = 1,\
+    .charge_online_softoff_wakeup = 0,\
+    .softoff_wakeup_time = 1000, \   //-----------------------开机识别
+    .short_click_check_time = 500, \  //----------------------短按识别
+    .long_click_check_time = 2000, \  //----------------------长按识别
+    .hold_click_check_time = 200, \   //----------------------长按保持识别
+    .eartch_touch_filter_time = 500, \
+    .eartch_touch_valid_time = 1300, \
+    .eartch_check_touch_valid_time = 50, \
+    .eartch_audio_det_valid_time = 2000, \
+    .eartch_audio_det_filter_param = 6, \
+}
+```
+
+
+
 # 恢复出厂设置
 
 ## 主从同步调用函数处理
@@ -599,7 +626,7 @@ TWS相关的灯效
 
 - ui_tws_msg_handler
   - TWS连接
-  - TWS断开
+  - TWS断开？？？
 
 
 
@@ -868,3 +895,33 @@ DAC与ADC记忆：
 - 数据手册要对的上芯片型号
 
 ![image-20250715145819250](./可视化SDK问题.assets/image-20250715145819250.png)
+
+## 按键配置
+
+![image-20250716115336960](./可视化SDK问题.assets/image-20250716115336960.png)
+
+# 可视化软件功能配置
+
+## 蓝牙配置
+
+- 无连接关机时间
+
+## 电源配置
+
+- 截至电压
+- 电池电量检测
+  - 关机电压
+  - 低电电压
+
+# 接口
+
+# 开在线调音
+
+![image-20250716101320148](./可视化SDK问题.assets/image-20250716101320148.png)
+
+编译一下应用这个配置，再导出调音配置。
+
+![image-20250716102044645](./可视化SDK问题.assets/image-20250716102044645.png)
+
+
+
