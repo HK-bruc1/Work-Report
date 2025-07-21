@@ -707,7 +707,7 @@ void bt_bredr_enter_dut_mode(u8 mode, u8 inquiry_scan_en)
 
 # 提示音
 
-在可视化工具中导出后，在顶级目录的output中tone_en.cfg。可以直接导入，但是需要有对应的提示音文件夹对应。
+在可视化工具中导出后，在顶级目录的output中tone_xx.cfg。可以直接导入即可。
 
 # 时钟频率
 
@@ -884,21 +884,25 @@ static int get_pipeline_uuid(const char *name)
 
 ![image-20250715143755665](./可视化SDK问题.assets/image-20250715143755665.png)
 
-DAC与ADC记忆：
+**DAC与ADC记忆：**
 
 - DAC是数字信号转为电压（声音）**喇叭**
   - D喇叭
 - ADC是电压（声音）转为数字信号  **麦克风**
 
+**后面的偏置脚是输入端，MICP MICN是用来确定是麦0还是麦1的同时也是确定输入端。**
+
+**隔直电容以及省电容**
+
+- 前者是硅麦
+- 后者是原麦
+
 ## LED配置
 
 - 数据手册要对的上芯片型号
+- 单IO推双灯需要一高一低点亮。
 
 ![image-20250715145819250](./可视化SDK问题.assets/image-20250715145819250.png)
-
-## 按键配置
-
-![image-20250716115336960](./可视化SDK问题.assets/image-20250716115336960.png)
 
 # 可视化软件功能配置
 
@@ -915,7 +919,24 @@ DAC与ADC记忆：
 
 # 接口
 
-# 开在线调音
+## 用来获取蓝牙连接的设备个数，不包含page状态的计数
+
+```c
+if (bt_get_total_connect_dev() == 0) {    //已经没有设备连接
+	//主耳白蓝灯交替闪，副耳蓝灯每5秒闪一次
+    if (tws_api_get_role() == TWS_ROLE_MASTER) {
+    	led_ui_set_state(LED_STA_RED_BLUE_FAST_FLASH_ALTERNATELY, DISP_CLEAR_OTHERS);
+    } else {
+    	led_ui_set_state(LED_STA_RED_FLASH_1TIMES_PER_5S, DISP_CLEAR_OTHERS);
+    }
+}
+```
+
+**TWS状态下似乎可以生效，但是单耳状态无法通过判断。**
+
+# 其他
+
+## 开在线调音
 
 ![image-20250716101320148](./可视化SDK问题.assets/image-20250716101320148.png)
 
@@ -923,5 +944,8 @@ DAC与ADC记忆：
 
 ![image-20250716102044645](./可视化SDK问题.assets/image-20250716102044645.png)
 
+## 开打印
 
+![image-20250721204146929](./可视化SDK问题.assets/image-20250721204146929.png)
 
+**接地线(B-标记)以及接RX引脚。**
