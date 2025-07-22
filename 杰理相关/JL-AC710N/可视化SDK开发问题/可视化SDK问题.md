@@ -628,6 +628,29 @@ TWS相关的灯效
   - TWS连接
   - TWS断开？？？
 
+## 灯效流程
+
+### 单耳
+
+**开机**
+
+1. `[LED_UI]APP_MSG_POWER_ON`
+2. `[LED_UI]led_enter_mode--APP_MODE_POWERON`
+3. `[LED_UI]ui_app_msg_handler--APP_MSG_TWS_UNPAIRED`
+4. `[LED_UI]APP_MSG_BT_IN_PAIRING_MODE`
+5. `[LED_UI]ui_bt_stack_msg_handler--BT_STATUS_FIRST_CONNECTED`
+6. `[LED_UI]ui_bt_stack_msg_handler--BT_STATUS_FIRST_CONNECTED`
+7. `[LED_UI]BT_STATUS_FIRST_DISCONNECT--BT_STATUS_SECOND_DISCONNECT`
+   - 连接时断开出现
+   - `[LED_UI]APP_MSG_BT_IN_PAIRING_MODE`
+     - 断开后会出现
+
+**关机**
+
+1. `[LED_UI]APP_MSG_POWER_OFF`
+
+## 函数调用链
+
 
 
 # DUT
@@ -904,6 +927,12 @@ static int get_pipeline_uuid(const char *name)
 
 ![image-20250715145819250](./可视化SDK问题.assets/image-20250715145819250.png)
 
+
+
+
+
+
+
 # 可视化软件功能配置
 
 ## 蓝牙配置
@@ -949,3 +978,24 @@ if (bt_get_total_connect_dev() == 0) {    //已经没有设备连接
 ![image-20250721204146929](./可视化SDK问题.assets/image-20250721204146929.png)
 
 **接地线(B-标记)以及接RX引脚。**
+
+## 合EQ
+
+可以导入三种格式，一般是bin文件：
+
+![image-20250722154033006](./可视化SDK问题.assets/image-20250722154033006.png)
+
+选择要合的模块，一般是音乐EQ:
+   						![image-20250722154222379](./可视化SDK问题.assets/image-20250722154222379.png)
+
+
+
+## 测试喇叭的输出功率
+
+bypass掉EQ，音量最大才是准确的。
+
+- 测试时把声音拉到最大。
+
+![image-20250722193516668](./可视化SDK问题.assets/image-20250722193516668.png)
+
+可视化SDK被注释掉了。不然可以调输出功率的。
