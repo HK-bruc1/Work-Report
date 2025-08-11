@@ -1074,3 +1074,20 @@ bypass掉EQ，音量最大才是准确的。
 - **DACLN (1脚)** - 左声道负极输出
 
 这个设计使用了左声道的差分输出来驱动单个扬声器，通过NS4150B功放芯片进行桥接放大，可以获得更大的输出功率。右声道输出(DACRP/DACRN)在这个设计中似乎没有使用。
+
+## 需要手动开启功放
+
+```c
+#if  DAC_PA_EN
+void user_pa_deal(u8 enable) {
+    if (enable) {
+        // 使能时，设置引脚为输出高电平
+        gpio_set_mode(IO_PORT_SPILT(IO_PORTC_02), PORT_OUTPUT_HIGH);
+    } else {
+        // 关闭时，设置引脚为输出低电平
+        gpio_set_mode(IO_PORT_SPILT(IO_PORTC_02), PORT_OUTPUT_LOW);
+    }
+}
+#endif
+```
+
