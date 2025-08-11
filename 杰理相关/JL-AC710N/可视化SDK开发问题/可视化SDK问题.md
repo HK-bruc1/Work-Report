@@ -67,6 +67,10 @@ char channel = tws_api_get_local_channel();
 }
 ```
 
+- 多击延迟参数没有看到。
+
+## 多击+长按按键事件检测
+
 
 
 # 恢复出厂设置
