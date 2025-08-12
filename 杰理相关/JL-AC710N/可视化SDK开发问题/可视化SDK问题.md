@@ -1091,3 +1091,240 @@ void user_pa_deal(u8 enable) {
 #endif
 ```
 
+# 多击+长按的按键事件类型需求
+
+客户很多都有触摸按键或者IO按键操作中，单击+长按，三击+长按。
+
+- 按照SDK原来的逻辑的话，在多击判定流程中，触发其他按键会打断多击序列从而以最后一次按键事件上报。
+- 怎么实现多击+长按的需求，以最小入侵方式实现？
+
+## 当前架构限制分析
+
+```c
+// 当前的多击识别逻辑（简化版）
+static int multi_clicks_translate(struct key_event *key) {
+    static u8 click_cnt = 0;
+    static u8 notify_value = 0xff;
+    
+    if (key->event == KEY_ACTION_CLICK) {
+        if (key->value != notify_value) {
+            click_cnt = 1;              // 新按键序列
+            notify_value = key->value;
+        } else {
+            click_cnt++;                // 多击计数
+        }
+        return 1;  // 拦截，等待多击完成
+    }
+    
+    if (key->event > KEY_ACTION_CLICK) {
+        //问题所在：任何非单击事件都会打断多击序列
+        click_cnt = 0;              // 重置计数
+        notify_value = NO_KEY;      // 清除状态
+        return 0;  // 直接发送当前事件（长按、Hold等）
+    }
+    
+    if (key->event == KEY_ACTION_NO_KEY) {
+        // 多击延时结束，发送最终多击事件
+        if (click_cnt > 0) {
+            // 转换为对应的多击事件
+            key->event = KEY_ACTION_CLICK + (click_cnt == 1 ? 0 : click_cnt - 1);
+            click_cnt = 0;
+            notify_value = NO_KEY;
+        }
+    }
+    
+    return 0;
+}
+```
+
+现有架构的问题在于：
+
+1. **打断机制**：长按事件会立即打断多击序列
+2. **状态清除**：无法记录多击+长按的组合状态
+3. **事件冲突**：多击延时期间的长按会被直接发送，丢失多击信息
+
+## 最小入侵方式实现
+
+```c
+/* --------------------------------------------------------------------------*/
+/**
+ * @brief 多击按键判断
+ *
+ * @param key：基础按键动作（mono_click、long、hold、up）和键值
+ *
+ * @return 0：不拦截按键事件
+ *         1：拦截按键事件
+ */
+/* ----------------------------------------------------------------------------*/
+static int multi_clicks_translate(struct key_event *key)
+{
+    static u8 click_cnt;          //多击计数器，没有显式赋值，初值为 0
+    static u8 notify_value = 0xff;//当前处理的按键值
+    struct key_hold *hold = get_key_hold(key->value, 0);
+
+    // 长按事件处理
+    if (key->event == KEY_ACTION_LONG) {
+        //优先判断多击+长按事件，长按按键事件之前是否有多击判断记录
+        //到目前为止的多击判断记录，有可能出现其他按键事件时其实是在多击判断流程中，这个序列出现其他按键事件就会被打断并被清除（在后面）。
+        //不过这里判断出按键事件后直接清楚了，不去执行后面了， 不然key->event可能被覆盖。
+        switch (click_cnt)
+        {
+        case 1:
+            // 单击+长按
+            key->event = KEY_ACTION_CLICK_PLUS_LONG;
+            //直接清除多击计数记录
+            click_cnt = 0;
+            notify_value = NO_KEY;
+            //不用拦截按键事件了，下面也不用执行了。
+            return 0;
+        case 2:
+            // 双击+长按
+            key->event = KEY_ACTION_DOUBLE_CLICK_PLUS_LONG;
+            //直接清除多击计数记录
+            click_cnt = 0;
+            notify_value = NO_KEY;
+            //不用拦截按键事件了，下面也不用执行了。
+            return 0;
+        case 3:
+            // 三击+长按
+            key->event = KEY_ACTION_TRIPLE_CLICK_PLUS_LONG;
+            //直接清除多击计数记录
+            click_cnt = 0;
+            notify_value = NO_KEY;
+            //不用拦截按键事件了，下面也不用执行了。
+            return 0;
+        default:
+            //单纯跳出switch，执行正常流程
+            break;
+        }
+        hold = get_key_hold(key->value, 1);
+        if (hold) {
+            hold->start_time = jiffies;// 先触发long按键事件，为了给hold计时，开始记录长按开始时间，利用长按按键事件为基础判断其他复杂按键事件
+        }
+    } else if (key->event == KEY_ACTION_HOLD) {// 触发long按键事件后，再触发Hold事件处理 - 根据持续时间细分
+        if (hold) {
+            int time_msec = jiffies_offset_to_msec(hold->start_time, jiffies);
+#if TCFG_SEND_HOLD_SEC_MSG_DURING_HOLD  //按住过程中发送按住几秒消息
+            // 按住过程中分段发送消息
+            if (time_msec >= 1000 && hold->action == 0) {
+                //发生长按后，保持1s
+                key->event = KEY_ACTION_HOLD_1SEC;
+            } else if (time_msec >= 3000 && hold->action == KEY_ACTION_HOLD_1SEC) {
+                //发生长按后，保持3s
+                key->event = KEY_ACTION_HOLD_3SEC;
+            } else if (time_msec >= 5000 && hold->action == KEY_ACTION_HOLD_3SEC) {
+                key->event = KEY_ACTION_HOLD_5SEC;
+            } else if (time_msec >= 8000 && hold->action == KEY_ACTION_HOLD_5SEC) {
+                key->event = KEY_ACTION_HOLD_8SEC;
+            } else if (time_msec >= 10000 && hold->action == KEY_ACTION_HOLD_8SEC) {
+                key->event = KEY_ACTION_HOLD_10SEC;
+            } else {
+                return 0;// 不发送重复消息
+            }
+            //最长按住消息，一直按住指定触发那个长按保持事件
+            if (time_msec >= (TCFG_MAX_HOLD_SEC & 0xff) * 1000) {
+                hold->action = KEY_ACTION_HOLD_10SEC;
+            } else {
+                hold->action = key->event;
+            }
+#else
+            // 仅在达到最大时间时发送一次消息
+            if (time_msec >= (TCFG_MAX_HOLD_SEC & 0xff) * 1000 && hold->action == 0) {
+                key->event = TCFG_MAX_HOLD_SEC >> 8;
+            } else {
+                return 0;
+            }
+            hold->action = key->event;
+#endif
+        }
+    } else {
+        // 抬起事件处理
+        if (hold) {
+#if TCFG_SEND_HOLD_SEC_MSG_DURING_HOLD == 0
+            //按住过程中发送按住几秒消息宏不使能的话，问题是客户需要按住触发还是抬起触发，按键类型是一样的。
+            // 抬起时根据按住总时间发送对应消息
+            if (hold->action == 0) {
+                int time_msec = jiffies_offset_to_msec(hold->start_time, jiffies);
+                if (time_msec >= 8000) {
+                    key->event = KEY_ACTION_HOLD_8SEC;
+                } else if (time_msec >= 5000) {
+                    key->event = KEY_ACTION_HOLD_5SEC;
+                } else if (time_msec >= 3000) {
+                    key->event = KEY_ACTION_HOLD_3SEC;
+                } else if (time_msec >= 1000) {
+                    key->event = KEY_ACTION_HOLD_1SEC;
+                }
+                if (time_msec >= (TCFG_MAX_HOLD_SEC & 0xff) * 1000) {
+                    key->event = TCFG_MAX_HOLD_SEC >> 8;
+                }
+            }
+#endif
+            // 清除长按状态
+            //得到对应按键事件后，把记录清除避免后面误判
+            hold->value = NO_KEY;
+            hold->action = 0;
+            hold->start_time = 0;
+        }
+    }
+    if (key->type == KEY_DRIVER_TYPE_CTMU_TOUCH) {
+        return 0;
+    }
+
+    if (key->event == KEY_ACTION_CLICK) {
+        if (key->value != notify_value) {
+            click_cnt = 1;
+            notify_value = key->value;
+        } else {
+            //开始多击计数
+            click_cnt++;
+        }
+        return 1;
+    }
+    if (key->event == KEY_ACTION_NO_KEY) {
+        if (click_cnt == 1) {
+            //多击延迟判断结束
+            key->event = KEY_ACTION_CLICK;
+        } else if (click_cnt <= 7) {
+            //最多7次连击
+            key->event = KEY_ACTION_DOUBLE_CLICK + (click_cnt - 2);
+        }
+        key->value = notify_value;
+        click_cnt = 0;
+        notify_value = NO_KEY;
+    } else if (key->event > KEY_ACTION_CLICK) {
+        //多击判断过程中出现其他按键事件就打断多击序列
+        //直接结束多击判断
+        click_cnt = 0;
+        notify_value = NO_KEY;
+    }
+    return 0;
+}
+```
+
+## 添加按键事件类型
+
+`apps\common\device\key\key_driver.h`
+
+```c
+    //多击+长按
+    KEY_ACTION_CLICK_PLUS_LONG,         // 单击+长按
+    KEY_ACTION_DOUBLE_CLICK_PLUS_LONG,  // 双击+长按
+    KEY_ACTION_TRIPLE_CLICK_PLUS_LONG,  // 三击+长按
+    KEY_ACTION_QUAD_CLICK_PLUS_LONG,    // 四击+长按
+
+    /*=======新增按键动作请在此处之上增加，不建议中间插入，可能影响基于偏移量计算的功能，比如多击判断流程=======*/
+    KEY_ACTION_NO_KEY,
+    KEY_ACTION_MAX,
+```
+
+## 在按键事件映射函数中使用
+
+`apps\earphone\mode\bt\bt_key_msg_table.c`
+
+添加case，上报对应的处理消息即可。
+
+## 缺陷
+
+- 多击判断最多到7击，所以最多是7击+长按。
+- 其他问题还没出现。
+
