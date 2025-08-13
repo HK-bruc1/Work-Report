@@ -190,3 +190,53 @@ A --- B --- C --- D --- E(revert B) (HEAD)
 - 但各个提交依然独立存在，E 只负责"抵消 B"
 
 所以 E 不是"取代"B，而是"抵消"B。B 依然存在，只是它的效果被 E 中和了。
+
+# 解决冲突
+
+- 远程与本地都修改了相同的地方
+
+```bash
+$ git pull
+remote: Enumerating objects: 29, done.
+remote: Counting objects: 100% (29/29), done.
+remote: Compressing objects: 100% (11/11), done.
+remote: Total 19 (delta 8), reused 19 (delta 8), pack-reused 0 (from 0)
+Unpacking objects: 100% (19/19), 32.61 KiB | 26.00 KiB/s, done.
+From github.com:HK-bruc1/Work-Report
+   c059b48..ab2bb49  main       -> origin/main
+Auto-merging 杰理相关/JL-AC710N/CLAUDE.md
+CONFLICT (add/add): Merge conflict in 杰理相关/JL-AC710N/CLAUDE.md
+Auto-merging 杰理相关/JL-AC710N/可视化SDK开发问题/可视化SDK问题.md
+error: could not apply fa80b88... 0813
+hint: Resolve all conflicts manually, mark them as resolved with
+hint: "git add/rm <conflicted_files>", then run "git rebase --continue".
+hint: You can instead skip this commit: run "git rebase --skip".
+hint: To abort and get back to the state before "git rebase", run "git rebase --abort".
+hint: Disable this message with "git config set advice.mergeConflict false"
+Could not apply fa80b88... 0813
+
+```
+
+现在遇到的是 **`git pull` 时的合并冲突**（实际上是因为 `git pull` 默认相当于 `fetch + rebase`，你的本地提交和远程提交修改了同一个文件的同一区域）。
+
+1. **VS Code 解决冲突**（直接编辑冲突文件，去掉 `<<<<<<<` / `=======` / `>>>>>>>` 标记）。
+2. `git add .` 标记已解决的冲突文件。
+3. `git rebase --continue` 继续应用剩余提交，直到 rebase 完成。
+
+等 rebase 完成之后，如果这是从远程拉取的更新，就别忘了最后：
+
+```bash
+git push -f
+```
+
+因为 rebase 改变了历史，普通 `push` 可能会被拒绝。
+
+我建议以后如果你用 VS Code 解决冲突，可以直接用它自带的 **Accept Incoming / Accept Current / Accept Both** 按钮，速度会比手动删标记更快。
+
+不过我注意到你的情况是 **pull 时触发 rebase**，这个是因为你的 `git pull` 默认启用了 `--rebase`。如果你更喜欢 merge 模式（一次性解决所有冲突，不分多步），可以执行：
+
+```bash
+git config pull.rebase false
+```
+
+这样以后 `git pull` 就直接 merge，不会每个提交都停下来问你。

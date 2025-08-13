@@ -653,7 +653,18 @@ TWS相关的灯效
 
 ## 超距灯效
 
+```c
+[00:02:42.184][LED_UI]---------------------------------------------------BT disconnect: event=0x9, reason=0x0
+[00:02:42.186][LED_UI]Normal disconnect - setting search LED effect-----------------------------------------------------
+[00:02:42.187][PWM_LED]led_name = 31, disp_mode = 0x2
+[00:02:42.188][EARPHONE]-----------bt_hci_event_handler reason 5 8
+[00:02:42.189][EARPHONE]----------------------------HCI_EVENT_DISCONNECTION_COMPLETE 
 
+67 F8 58 B3 CC A4 
+[00:02:42.190][EARPHONE]HCI_EVENT_DISCONNECTION_COMPLETE---------------------------ERROR_CODE_CONNECTION_TIMEOUT 
+```
+
+此时灯效已经更新了BT_STATUS_FIRST_DISCONNECT状态。
 
 # DUT
 
@@ -1325,4 +1336,55 @@ static int multi_clicks_translate(struct key_event *key)
 
 - 多击判断最多到7击，所以最多是7击+长按。
 - 其他问题还没出现。
+
+# 三方通话
+
+```c
+avctp_user.c.o (symbol from plugin): In function `bt_set_stack_exiting':
+(.text+0x0): multiple definition of `get_second_call_status'
+objs/apps/earphone/mode/bt/bt_key_msg_table.c.o (symbol from plugin):(.text+0x0): first defined here
+build/Makefile.mk:355: recipe for target 'cpu/br56/tools/sdk.elf' failed
+make[1]: *** [cpu/br56/tools/sdk.elf] Error 1
+make[1]: Leaving directory 'D:/work_project/JL/DHF-AC710N-V300P03/SDK'
+Makefile:220: recipe for target 'all' failed
+make: *** [all] Error 2
+```
+
+意思是链接器在合并目标文件时，发现 `get_second_call_status` 这个函数被定义了 **两次**：
+
+- 第一次：`objs/apps/earphone/mode/bt/bt_key_msg_table.c.o`
+- 第二次：`avctp_user.c.o`
+
+在 C 语言里，如果一个函数在多个 `.c` 文件中都写成了 **函数定义**（而不是 `extern` 声明），编译没问题，但链接时会冲突，因为全局符号重复了。
+
+- `get_second_call_status`这个函数在库里。.o文件，使用时记得extern声明一下即可。
+- 不然没用。
+- 三方通话的操作都在第一方通话状态下利用API接口判断即可。
+
+
+
+```c
+//三方通话
+typedef enum{
+    BT_THREE_CALL_ACTIVE   = 0,//当前正在和第一个号码通话中，没有来电
+    BT_THREE_CALL_INCOMING = 2,//当前正在和第一个号码通话中，第二个电话进来
+    BT_THREE_CALL_COMING   = 8,//当前已经保留了一个电话，正在和另外一个手机通话
+}BT_THREE_CALL_IND_STA;
+
+
+case KEY_ACTION_DOUBLE_CLICK:
+#if defined (_GK158_Left) || defined(_GK158_Right)
+            //先判断是否有三方通话操作：三方通话通话中，双击保持当前通话切换保持通话。
+            if(get_second_call_status() == BT_THREE_CALL_COMING){
+                //双击保持当前通话切换保持通话-----------经过验证
+                app_msg = APP_MSG_CALL_THREE_WAY_ANSWER2;
+                log_info("active_device-----KEY_ACTION_DOUBLE_CLICK-----get_second_call_status()-------------------------------------------------------   \n");
+            }else{
+                //通话中双击挂断
+                app_msg = APP_MSG_CALL_HANGUP;
+                log_info("active_device-----KEY_ACTION_DOUBLE_CLICK-----APP_MSG_CALL_HANGUP-------------------------------------------------------   \n");
+            }
+#endif
+            break;
+```
 
