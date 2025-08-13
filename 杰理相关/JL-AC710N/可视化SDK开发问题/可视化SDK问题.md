@@ -69,10 +69,6 @@ char channel = tws_api_get_local_channel();
 
 - 多击延迟参数没有看到。
 
-## 多击+长按按键事件检测
-
-
-
 # 恢复出厂设置
 
 ## 主从同步调用函数处理
@@ -654,6 +650,8 @@ TWS相关的灯效
 1. `[LED_UI]APP_MSG_POWER_OFF`
 
 ## 函数调用链
+
+## 超距灯效
 
 
 

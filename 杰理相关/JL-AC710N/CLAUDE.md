@@ -4,170 +4,121 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a TWS (True Wireless Stereo) earphone firmware project built on the Jieli BR56 chipset. The project contains SDK code, customer configurations, and build tools for developing TWS earphones with advanced audio processing, ANC (Active Noise Cancellation), and Bluetooth connectivity.
+This is the DHF AC710N-V300P03 SDK - a firmware development kit for Bluetooth earphone/headset devices based on the BR56 CPU architecture. The project supports various customer products including TWS (True Wireless Stereo) earphones with features like ANC (Active Noise Cancellation), spatial audio, and multi-protocol communication.
 
-## Repository Structure
+## Key Architecture Components
 
-```
-DHF-AC710N-V300P03/
-├── SDK/                    # Core SDK containing firmware source
-│   ├── apps/               # Application layer code
-│   │   ├── earphone/       # Main earphone application
-│   │   └── common/         # Common application utilities
-│   ├── audio/              # Audio processing modules
-│   │   ├── anc/            # Active Noise Cancellation
-│   │   ├── CVP/            # Call Voice Processing
-│   │   ├── effect/         # Audio effects
-│   │   └── interface/      # Audio interfaces
-│   ├── customer/           # Customer-specific configurations
-│   │   ├── GK158_Left/     # Left earphone config
-│   │   ├── GK158_Right/    # Right earphone config
-│   │   └── product.conf    # Product configuration
-│   ├── cpu/br56/           # BR56 chip-specific code
-│   └── tools/              # Build and utility tools
-├── src/                    # Configuration files (JSON/flow files)
-├── output/                 # Build output directory
-└── project.jlproj         # Project file
-```
+### CPU and Hardware Platform
+- **Target CPU**: BR56 (pi32v2 architecture)
+- **Build System**: Custom Makefile-based with clang toolchain
+- **Flash Management**: NOR flash with virtual FAT filesystem
+- **Audio DSP**: Hardware-accelerated audio processing with CVP (Communication Voice Processing)
 
-## Build System
+### Application Structure
+- **Main Application**: `apps/earphone/` - Primary TWS earphone application
+- **Common Libraries**: `apps/common/` - Shared functionality across products
+- **Audio Framework**: `audio/` - Comprehensive audio processing pipeline
+- **Customer Configs**: `customer/` - Product-specific configurations
 
-### Primary Build Commands
+### Core Subsystems
+1. **Bluetooth Stack** (`interface/btstack/`):
+   - Classic Bluetooth and BLE support
+   - TWS synchronization and data transfer
+   - Third-party protocols (RCSP, Google Fast Pair, etc.)
 
-**Main build command:**
+2. **Audio Processing** (`audio/`):
+   - CVP for call processing (AEC, noise suppression)
+   - Effects engine (EQ, reverb, spatial audio)
+   - Codec support (SBC, AAC, LC3, LDAC)
+   - ANC processing
+
+3. **Device Management** (`apps/common/dev_manager/`):
+   - Power management and charging
+   - Key input handling (touch, physical buttons)
+   - LED/UI control
+   - Sensor integration (IMU for spatial audio)
+
+## Build and Development Commands
+
+### Build Commands
 ```bash
-# Windows (from SDK directory)
-product_compile_image.bat
+# Standard build and download to device
+make
 
-# Alternative make commands
-make all           # Build the project
-make clean         # Clean build artifacts
-make VERBOSE=1     # Build with detailed output
+# Verbose build output
+make VERBOSE=1
+
+# Clean build artifacts
+make clean
 ```
 
-**VSCode Integration:**
-- Uses `.vscode/tasks.json` with default build task
-- Build task runs `product_compile_image.bat` on Windows or `make all -j 16` on Linux
+### Project Configuration
+The build system uses a three-tier configuration:
+1. `customer_path.conf` - Selects active customer configuration
+2. `customer/product.conf` - Product-level settings
+3. `customer/[CUSTOMER]/customer.conf` - Customer-specific settings
 
-### Build Configuration
+### Customer Management
+```bash
+# Copy customer configuration to SDK
+customer_copy.bat
 
-The build system uses a hierarchical configuration approach:
-
-1. **customer_path.conf** - Defines current customer configuration (e.g., `CUSTOMER_PATH=GK158_Left`)
-2. **customer/product.conf** - Product-level configuration and compiler flags
-3. **customer/{CUSTOMER}/customer.conf** - Customer-specific settings including IC model selection
-
-**Key configuration variables:**
-- `_IC_Model`: IC selection (0=AC7106A8, 1=AC7103D4)
-- `_DAC_PA_EN`: Manual power amplifier control
-- `_LOW_POWER_WARN_TIME`: Low battery warning timing
-
-### Build Process
-
-1. **Pre-build**: `genFileList.c` is preprocessed to generate `fileList.mk` with dynamic file lists
-2. **Main build**: `make -f build/Makefile.mk` compiles the project
-3. **Post-processing**: Runs download scripts for firmware packaging
-
-### Output Files
-- **Primary output**: `cpu/br56/tools/sdk.elf`
-- **Customer binaries**: Generated in `output/` directory as `.fw` and `.ufw` files
-- **Configuration files**: `cfg_tool.bin`, `stream.bin`, `tone_en.cfg`
+# Switch between customer configurations by editing customer_path.conf
+```
 
 ## Development Workflow
 
-### Customer Configuration Selection
+### Adding New Features
+1. Check existing implementations in `apps/common/` for reusable components
+2. Follow the event-driven architecture pattern used throughout the codebase
+3. Add configuration options to the customer config system
+4. Use the audio framework nodes for audio processing features
 
-To switch between different customer configurations:
-1. Edit `customer_path.conf` to set `CUSTOMER_PATH`
-2. Each customer directory contains:
-   - `customer.conf` - Build configuration
-   - `sdk_config.c/.h` - SDK feature configuration
-   - Binary files (ANC coefficients, audio streams, etc.)
+### Audio Development
+- Audio processing uses a node-based pipeline architecture
+- Effects are modular and configurable via customer settings
+- CVP parameters are tunable through online debug tools
+- Spatial audio requires IMU sensor integration
 
-### Common Development Tasks
+### Customer Customization
+Each customer product has:
+- Hardware configuration (GPIO, peripherals)
+- Audio tuning parameters (EQ, ANC coefficients)
+- Key mapping and LED patterns
+- Bluetooth and pairing behavior
+- Tone/prompt audio files
 
-**Build for specific customer:**
-```bash
-# Edit customer_path.conf to set desired customer
-# Then run build
-product_compile_image.bat
-```
+### Testing and Validation
+- Use testbox mode for production testing
+- Audio DUT (Device Under Test) tools for acoustic validation
+- Online debug capabilities for real-time parameter tuning
+- RSSI and RF testing utilities
 
-**Clean build:**
-```bash
-make clean
-make all
-```
+## Code Organization Patterns
 
-**Audio configuration:**
-- Audio flow files in `src/音频流程/*.x6flow`
-- Configuration files in `src/*.json`
+### Module Structure
+- Header files define interfaces in `include/` directories
+- Implementation follows component-based architecture
+- Configuration is separated from functional code
+- Platform-specific code is isolated in `cpu/br56/`
 
-## Architecture Overview
+### Memory Management
+- Overlay system for code optimization
+- Careful RAM usage due to embedded constraints
+- Streaming buffers for audio processing
+- VM (Virtual Memory) system for persistent storage
 
-### Message-Driven Architecture
+### Event System
+- Central event manager coordinates subsystems
+- Key events trigger mode changes and audio routing
+- Battery and charging events manage power states
+- Bluetooth events handle connection management
 
-The firmware uses a sophisticated message dispatching system with multiple message sources:
-- `MSG_FROM_KEY` - Button/key events
-- `MSG_FROM_TWS` - TWS peer communication
-- `MSG_FROM_BT_STACK` - Bluetooth stack events
-- `MSG_FROM_BATTERY` - Battery/charging events
-- `MSG_FROM_AUDIO` - Audio system events
+## Important File Locations
 
-### Key Components
-
-**Main Application Loop** (`SDK/apps/earphone/app_main.c:633`):
-```c
-while (1) {
-    app_set_current_mode(mode);
-    switch (mode->name) {
-    case APP_MODE_BT:
-        mode = app_enter_bt_mode(g_mode_switch_arg);
-        break;
-    // Other modes...
-    }
-}
-```
-
-**TWS Synchronization**: Automatic state synchronization between left/right earphones including:
-- Battery levels
-- Audio controls
-- ANC settings  
-- Button presses
-
-### Task Architecture
-- **app_core** (Priority 1): Main application control
-- **btstack** (Priority 3): Bluetooth protocol stack
-- **jlstream** (Priority 3): Audio stream processing
-- **aec** (Priority 2): Audio echo cancellation
-- **anc** (Priority 3): Active noise cancellation
-
-## Key Files and Locations
-
-**Core Application:**
-- `SDK/apps/earphone/app_main.c` - Main application entry point and mode switching
-- `SDK/apps/earphone/mode/bt/earphone.c` - Bluetooth mode implementation
-
-**Message System:**
-- `SDK/apps/earphone/include/app_msg.h` - Message type definitions
-- `SDK/apps/earphone/message/` - Message adapters and handlers
-
-**Audio Processing:**
-- `SDK/audio/` - Audio effects, ANC, CVP implementations
-- `SDK/audio/framework/` - Audio processing framework
-
-**Configuration:**
-- `SDK/customer/product.conf` - Product build configuration
-- `SDK/customer/{CUSTOMER}/customer.conf` - Customer-specific settings
-
-## Build Environment Setup
-
-**Windows Requirements:**
-- Jieli toolchain at `C:/JL/pi32/bin/`
-- System environment includes required build tools
-
-**Linux Requirements:**  
-- Jieli toolchain at `/opt/jieli/pi32v2/bin/`
-- Ensure `ulimit -n` is sufficient (>8096) for linking
-
-The build system automatically detects the platform and configures appropriate tool paths and commands.
+- **Main Entry**: `apps/earphone/app_main.c`
+- **Build Config**: `Makefile`, `customer_path.conf`
+- **Audio Config**: Customer-specific audio configuration files
+- **Interface Headers**: `interface/` directory contains all API definitions
+- **Customer Assets**: `customer/[NAME]/src/` contains audio files and JSON configs
+- **Output Firmware**: `cpu/br56/tools/` contains generated firmware files
