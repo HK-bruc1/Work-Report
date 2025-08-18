@@ -15,12 +15,40 @@
 
 当前这个宏被设置为 `0`，意味着在更新时会擦除该VM区域。如果设置为 `1`，则在更新时会保留该区域的数据不被擦除。
 
-# 低电提醒时间
+# 开关机以及电源
+
+## 低电提醒时间
 
 `apps\earphone\include\app_power_manage.h`
 
 ```c
 #define LOW_POWER_WARN_TIME   	(5 * 60 * 1000)  //低电提醒时间
+```
+
+## 长按开机时间
+
+`interface\driver\cpu\periph\lp_touch_key_common.h`
+
+```c
+#define LP_TOUCH_KEY_PLATFORM_DATA_BEGIN(data) \
+    const struct lp_touch_key_platform_data data = {
+
+#define LP_TOUCH_KEY_PLATFORM_DATA_END() \
+    .ldo_wkp_algo_reset = 1,\
+    .charge_enter_algo_reset = 0,\
+    .charge_exit_algo_reset = 1,\
+    .charge_online_algo_reset = 1,\
+    .charge_online_softoff_wakeup = 0,\
+    .softoff_wakeup_time = 4000, \
+    .short_click_check_time = 500, \
+    .long_click_check_time = 2000, \
+    .hold_click_check_time = 200, \
+    .eartch_touch_filter_time = 500, \
+    .eartch_touch_valid_time = 1300, \
+    .eartch_check_touch_valid_time = 50, \
+    .eartch_audio_det_valid_time = 2000, \
+    .eartch_audio_det_filter_param = 6, \
+}
 ```
 
 # TWS相关
