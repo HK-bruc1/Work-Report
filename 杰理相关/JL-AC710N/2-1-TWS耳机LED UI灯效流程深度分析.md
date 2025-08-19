@@ -624,171 +624,117 @@ led_ui_set_state(LED_STA_BLUE_SLOW_FLASH, DISP_RECOVERABLE);
 
 这种LED UI系统设计实现了状态驱动的视觉反馈机制，为用户提供了直观的TWS耳机状态指示，同时保持了良好的系统架构和扩展性。
 
-## 8. 蓝牙超距断开灯效Bug分析与解决方案
+# 灯效流程
 
-### 8.1 问题现状分析
+## 单耳
 
-**当前实现** (`apps\earphone\mode\bt\earphone.c:858`):
-```c
-case ERROR_CODE_CONNECTION_TIMEOUT:
-    log_info(" ERROR_CODE_CONNECTION_TIMEOUT \n");
-#if defined (_GK158_Left) || defined(_GK158_Right)
-    // 直接在HCI事件处理中调用灯效设置
-    log_info("ERROR_CODE_CONNECTION_TIMEOUT--------------LED_STA_BLUE_FLASH_1TIMES_PER_5S-------------------------------------------\n");
-    led_ui_set_state(LED_STA_BLUE_FLASH_1TIMES_PER_5S, DISP_CLEAR_OTHERS);
-#endif
-    bt_hci_event_connection_timeout(bt);
-    break;
+```
+开机未连接
+[00:00:02.169][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
+[00:00:02.170][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:04.235][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
+[00:00:04.236][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:04.240][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
+[00:00:10.251][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
+[00:00:23.962][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
+[00:00:36.692][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
+[00:00:48.558][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
+
+连接手机蓝牙后
+[00:04:51.325][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_CONNECTED
+[00:04:57.334][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:04:59.887][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+
+手动断开-1
+[00:07:00.212][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:07:00.467][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT
+[00:07:00.698][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
+
+超距离断开-2
+[00:01:26.835][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:12:10.076][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT
+[00:01:27.064][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE
+[00:01:41.092][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE
+[00:01:55.117][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE
+
+连接后放歌
+[00:06:18.690][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:06:22.731][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_HANGUP----BT_STATUS_A2DP_MEDIA_START----BT_STATUS_PHONE_ACTIVE
+
+停止放歌
+[00:06:28.999][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_A2DP_MEDIA_STOP
+[00:06:33.821][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+
+来电
+[00:08:33.328][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:08:33.349][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_INCOME-------------------------------------------------------
+
+[00:08:33.427][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SCO_CONNECTION_REQ----------BT_CALL_INCOMING---------
+
+拒接/挂断
+[00:08:40.326][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_HANGUP----BT_STATUS_A2DP_MEDIA_START----BT_STATUS_PHONE_ACTIVE
+
+通话中
+[00:11:05.634][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_HANGUP----BT_STATUS_A2DP_MEDIA_START----BT_STATUS_PHONE_ACTIVE
+
+亮屏幕/熄屏幕会返回播歌状态
+开屏幕都会默认返回播歌状态，如果确实没播放，就会
+[00:14:14.021][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_A2DP_MEDIA_STOP
 ```
 
-**问题分析**：
-1. **架构违背**：在HCI事件处理函数中直接调用LED UI接口，违背了LED UI框架的设计理念
-2. **优先级冲突**：可能被其他更高优先级的灯效覆盖(如TWS配对、连接状态等)
-3. **时序问题**：HCI事件处理时，系统可能还在处理其他状态变化，导致灯效被后续事件覆盖
-4. **消息流程错误**：LED UI框架设计为响应消息的方式，直接调用可能导致状态不一致
+## 双耳
 
-### 8.2 LED UI框架的正确使用方式
-
-**设计理念**：LED UI系统通过**全局消息监听**的方式响应系统状态变化，而非在具体业务逻辑中直接调用。
-
-**正确的消息流程**：
 ```
-业务事件发生 → 产生对应消息 → LED UI框架拦截 → 更新对应灯效
-```
+TWS配对成功
+[00:15:28.908][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
+[00:15:49.388][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTED--------
+[00:00:19.116][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODEIP
 
-而不是：
-```
-业务事件发生 → 直接调用led_ui_set_state() [错误方式]
-```
+TWS断开
+[00:23:47.398][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTION_DETACH--------
+[00:23:47.441][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
+回连成功
+[00:24:57.898][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTED------------------------------
 
-### 8.3 推荐解决方案
 
-#### 方案一：通过APP消息机制 (推荐)
+连接手机成功
+[00:18:07.685][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_CONNECTED
+[00:18:13.728][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:18:21.728][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
 
-**步骤1：定义超距断开消息**
+断开
+[00:19:15.220][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:19:15.366][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT
 
-在`app_msg.h`中添加新消息：
-```c
-enum {
-    // 现有消息...
-    APP_MSG_BT_CONNECTION_TIMEOUT,    // 蓝牙超距断开消息
-};
+超距离断开
+[00:20:47.541][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:20:47.592][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT
 ```
 
-**步骤2：在HCI事件处理中发送消息**
+## 各灯效限定
 
-修改`earphone.c`中的处理：
-```c
-case ERROR_CODE_CONNECTION_TIMEOUT:
-    log_info(" ERROR_CODE_CONNECTION_TIMEOUT \n");
-#if defined (_GK158_Left) || defined(_GK158_Right)
-    // 发送APP消息而非直接调用LED接口
-    app_send_message(APP_MSG_BT_CONNECTION_TIMEOUT, 0);
-#endif
-    bt_hci_event_connection_timeout(bt);
-    break;
-```
-
-**步骤3：在LED UI框架中处理消息**
-
-在`led_ui_msg_handler.c`的`ui_app_msg_handler`中添加处理：
-```c
-static int ui_app_msg_handler(int *msg)
-{
-    switch (msg[0]) {
-    // 现有处理...
-    
-    case APP_MSG_BT_CONNECTION_TIMEOUT:
-        log_info("ui_app_msg_handler--APP_MSG_BT_CONNECTION_TIMEOUT\n");
-        // 确保清除其他灯效，设置超距断开灯效
-        led_ui_set_state(LED_STA_BLUE_FLASH_1TIMES_PER_5S, DISP_CLEAR_OTHERS);
-        break;
-    }
-    return 0;
-}
-```
-
-#### 方案二：通过蓝牙状态消息 (备选)
-
-**利用现有的BT_STACK消息机制**：
-
-在`ui_bt_stack_msg_handler`中添加对`ERROR_CODE_CONNECTION_TIMEOUT`的处理：
-```c
-static int ui_bt_stack_msg_handler(int *msg)
-{
-    struct bt_event *bt = (struct bt_event *)msg;
-    
-    switch (bt->event) {
-    // 现有处理...
-    
-    case BT_STATUS_FIRST_DISCONNECT:
-        // 检查断开原因
-        if (bt->value == ERROR_CODE_CONNECTION_TIMEOUT) {
-            log_info("Connection timeout detected in LED UI\n");
-            led_ui_set_state(LED_STA_BLUE_FLASH_1TIMES_PER_5S, DISP_CLEAR_OTHERS);
-        } else {
-            // 其他断开原因的处理
-            led_ui_set_state(LED_STA_RED_BLUE_FAST_FLASH_ALTERNATELY, DISP_CLEAR_OTHERS);
-        }
-        break;
-    }
-    return 0;
-}
-```
-
-### 8.4 灯效优先级管理建议
-
-**使用更强的显示模式确保灯效不被覆盖**：
-
-```c
-// 普通灯效 - 可能被覆盖
-led_ui_set_state(LED_STA_BLUE_FLASH_1TIMES_PER_5S, DISP_CLEAR_OTHERS);
-
-// 高优先级灯效 - 不可中断
-led_ui_set_state(LED_STA_BLUE_FLASH_1TIMES_PER_5S, DISP_NON_INTR | DISP_CLEAR_OTHERS);
-
-// 超距断开专用灯效 - 不可中断且TWS同步
-led_ui_set_state(LED_STA_BLUE_FLASH_1TIMES_PER_5S, DISP_NON_INTR | DISP_CLEAR_OTHERS | DISP_TWS_SYNC);
-```
-
-### 8.5 调试建议
-
-**添加调试日志确认灯效设置**：
-```c
-case APP_MSG_BT_CONNECTION_TIMEOUT:
-    log_info("=== Setting connection timeout LED effect ===\n");
-    log_info("Current LED state: %d\n", led_ui_get_state_name());
-    led_ui_set_state(LED_STA_BLUE_FLASH_1TIMES_PER_5S, DISP_NON_INTR | DISP_CLEAR_OTHERS);
-    log_info("LED effect set, new state: %d\n", led_ui_get_state_name());
-    break;
-```
-
-**检查是否有其他地方覆盖灯效**：
-- 搜索代码中是否有其他地方在超距断开后设置了不同的灯效
-- 检查TWS重连逻辑是否影响了灯效显示
-- 确认定时器回调中是否有灯效更新
-
-### 8.6 最佳实践总结
-
-1. **遵循消息驱动架构**：始终通过消息机制触发LED变化，而非直接调用
-2. **使用合适的显示模式**：根据灯效重要程度选择合适的`disp_mode`
-3. **集中化LED控制**：所有LED逻辑集中在LED UI框架中处理
-4. **添加充分日志**：便于调试灯效优先级和覆盖问题
-5. **考虑TWS同步**：重要状态灯效应该双耳同步显示
-
-**推荐的最终实现**：
-```c
-// 在HCI事件处理中
-case ERROR_CODE_CONNECTION_TIMEOUT:
-    app_send_message(APP_MSG_BT_CONNECTION_TIMEOUT, 0);
-    bt_hci_event_connection_timeout(bt);
-    break;
-
-// 在LED UI框架中  
-case APP_MSG_BT_CONNECTION_TIMEOUT:
-    led_ui_set_state(LED_STA_BLUE_FLASH_1TIMES_PER_5S, 
-                     DISP_NON_INTR | DISP_CLEAR_OTHERS | DISP_TWS_SYNC);
-    break;
-```
-
-这样的实现既符合框架设计理念，又能确保灯效的正确显示和优先级管理。
+- 开机
+  - `[00:00:02.169][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON`
+- 关机
+  - `[00:30:48.142][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_OFF`
+- 未连接手机之前的灯效
+  - `[00:07:00.467][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT`
+- 连接手机后的灯效
+  - `[00:04:51.325][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_CONNECTED`
+- 超距离断开
+  - `[00:01:27.064][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE`
+  - 会覆盖断开的`[00:07:00.467][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT`
+- 播放歌曲
+  - `[00:06:22.731][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_HANGUP----BT_STATUS_A2DP_MEDIA_START----BT_STATUS_PHONE_ACTIVE`
+- 停止放歌
+  - `[00:06:28.999][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_A2DP_MEDIA_STOP`
+- 来电
+  - `[00:08:33.349][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_INCOME------------------------------`
+  - `[00:08:33.427][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SCO_CONNECTION_REQ------BT_CALL_INCOMING`
+  - 避免覆盖，一个就行
+- 拒接/挂断/通话中
+  - `[00:08:40.326][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_HANGUP----BT_STATUS_A2DP_MEDIA_START----BT_STATUS_PHONE_ACTIVE`
+- TWS配对成功
+  - `[00:15:49.388][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTED--------`
+- TWS断开
+  - `[00:23:47.398][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTION_DETACH--------`
