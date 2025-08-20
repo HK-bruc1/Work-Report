@@ -771,7 +771,193 @@ void bt_bredr_enter_dut_mode(u8 mode, u8 inquiry_scan_en)
 
 # 提示音
 
+## 提示音文件
+
 在可视化工具中导出后，在顶级目录的output中tone_xx.cfg。可以直接导入即可。
+
+## 按键提示音
+
+使能按键音
+
+`apps\earphone\board\br56\board_ac710n_demo_cfg.h`
+
+- `TCFG_KEY_TONE_EN`
+
+导入音源
+
+- 工具开不开对应解码好像都可以，保持WAV格式，转换反而不行。
+
+### 发送按键音消息
+
+`apps\earphone\mode\key_tone.c`
+
+```c
+#ifdef SUPPORT_MS_EXTENSIONS
+#pragma bss_seg(".key_tone.data.bss")
+#pragma data_seg(".key_tone.data")
+#pragma const_seg(".key_tone.text.const")
+#pragma code_seg(".key_tone.text")
+#endif
+#include "fs/resfile.h"
+#include "app_main.h"
+#include "app_tone.h"
+#include "key_driver.h"
+
+#if TCFG_KEY_TONE_NODE_ENABLE
+
+static u8 g_have_key_tone_file = 0;
+
+static bool is_key_tone_enable()
+{
+    if (g_have_key_tone_file == 0) {
+        char file_path[48];
+        strcpy(file_path, FLASH_RES_PATH);
+        strcpy(file_path + strlen(FLASH_RES_PATH), get_tone_files()->key_tone);
+        void *file = resfile_open(file_path);
+        if (file) {
+            g_have_key_tone_file = 1;
+            resfile_close(file);
+        } else {
+            g_have_key_tone_file = 0xff;
+        }
+    }
+    return g_have_key_tone_file == 1 ? true : false;
+}
+
+static int key_tone_msg_handler(int *msg)
+{
+    if (!is_key_tone_enable()) {
+        return 0;
+    }
+    if (msg[0] == APP_MSG_KEY_TONE) {
+        play_key_tone_file(get_tone_files()->key_tone);
+    }
+    return 0;
+}
+APP_MSG_HANDLER(key_tone_msg_entry) = {
+    .owner      = 0xff,
+    .from       = MSG_FROM_APP,
+    .handler    = key_tone_msg_handler,
+};
+#endif
+
+
+#if TCFG_IOKEY_ENABLE
+void key_down_event_handler(u8 key_value)
+{
+#if TCFG_KEY_TONE_NODE_ENABLE
+    if (g_have_key_tone_file == 1) {
+        app_send_message(APP_MSG_KEY_TONE, 0);
+    }
+#endif
+}
+#endif
+
+#if TCFG_LP_TOUCH_KEY_ENABLE
+void touch_key_send_key_tone_msg(void)
+{
+#if TCFG_KEY_TONE_NODE_ENABLE
+    if (g_have_key_tone_file == 1) {
+        app_send_message(APP_MSG_KEY_TONE, 0);
+    }
+#endif
+}
+#endif
+```
+
+已经提供了发送按键音的接口。
+
+`cpu\br56\periph\touch\lp_touch_key.c`
+
+```c
+void lp_touch_key_state_event_deal(u32 ch_idx, u32 event)
+{
+    struct touch_key_arg *arg = &(__this->arg[ch_idx]);
+    const struct touch_key_cfg *key_cfg = &(__this->pdata->key_cfg[ch_idx]);
+
+    if (__this->pdata->slide_mode_en) {
+        if (event == TOUCH_KEY_FALLING_EVENT) {
+            lp_touch_key_fall_click_handle(ch_idx);
+        } else if (event == TOUCH_KEY_RAISING_EVENT) {
+            lp_touch_key_cnacel_long_hold_click_check(ch_idx);
+        }
+        u32 key_type = lp_touch_key_check_slide_key_type(event, ch_idx);
+        if (key_type) {
+            log_debug("touch key%d: key_type = 0x%x\n", ch_idx, key_type);
+            lp_touch_key_send_slide_key_type_event(key_type);
+        }
+    } else {
+        switch (event) {
+        case TOUCH_KEY_FALLING_EVENT:
+            log_debug("touch key%d FALLING !\n", ch_idx);
+
+#if TCFG_LP_EARTCH_KEY_ENABLE
+            if (key_cfg->eartch_en) {
+                touch_abandon_short_click_once = 0;
+                lp_touch_key_eartch_event_deal(1);
+                return;
+            }
+#endif
+
+#if CTMU_CHECK_LONG_CLICK_BY_RES
+            arg->falling_res_avg = lp_touch_key_ctmu_res_buf_avg(ch_idx);
+            log_debug("falling_res_avg: %d", arg->falling_res_avg);
+#endif
+            lp_touch_key_fall_click_handle(ch_idx);
+            //lp_touch_key_send_key_tone_msg();
+#if TCFG_KEY_TONE_EN
+            extern void touch_key_send_key_tone_msg(void);
+            touch_key_send_key_tone_msg();
+            log_debug("touch_key_send_key_tone_msg-----------------------");
+#endif
+            break;
+
+        case TOUCH_KEY_RAISING_EVENT:
+            log_debug("touch key%d RAISING !\n", ch_idx);
+
+#if TCFG_LP_EARTCH_KEY_ENABLE
+            if (key_cfg->eartch_en) {
+                touch_abandon_short_click_once = 0;
+                lp_touch_key_eartch_event_deal(0);
+                return;
+            }
+#endif
+
+#if CTMU_CHECK_LONG_CLICK_BY_RES
+            lp_touch_key_ctmu_res_buf_clear(ch_idx);
+#endif
+            lp_touch_key_cnacel_long_hold_click_check(ch_idx);
+            lp_touch_key_raise_click_handle(ch_idx);
+            break;
+
+        case TOUCH_KEY_LONG_EVENT:
+            log_debug("touch key%d LONG !\n", ch_idx);
+
+#if CTMU_CHECK_LONG_CLICK_BY_RES
+            if (lp_touch_key_check_long_click_by_ctmu_res(ch_idx)) {
+                return;
+            }
+#endif
+            lp_touch_key_long_click_handle(ch_idx);
+            lp_touch_key_send_key_long_tone_msg();
+            break;
+
+        case TOUCH_KEY_HOLD_EVENT:
+            log_debug("touch key%d HOLD !\n", ch_idx);
+
+#if CTMU_CHECK_LONG_CLICK_BY_RES
+            if (lp_touch_key_check_long_click_by_ctmu_res(ch_idx)) {
+                return;
+            }
+#endif
+            lp_touch_key_hold_click_handle(ch_idx);
+            break;
+        }
+    }
+}
+```
+
+
 
 # 时钟频率
 
