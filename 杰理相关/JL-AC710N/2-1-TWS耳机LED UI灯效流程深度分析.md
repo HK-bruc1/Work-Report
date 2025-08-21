@@ -685,6 +685,26 @@ led_ui_set_state(LED_STA_BLUE_SLOW_FLASH, DISP_RECOVERABLE);
 ## 双耳
 
 ```
+开机(有配对记录之后)
+[00:00:01.269][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
+[00:00:01.270][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:02.288][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
+[00:00:02.289][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:02.292][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
+[00:00:08.306][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE
+[00:00:16.321][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE。。。TWS回连超时后最终
+[00:01:12.417][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
+
+开机（没有配对记录情况下）
+[00:00:01.359][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
+[00:00:01.360][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:02.432][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
+[00:00:02.433][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:02.437][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
+[00:00:08.445][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
+
+
+
 TWS配对成功
 [00:15:28.908][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
 [00:15:49.388][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTED--------
@@ -702,7 +722,7 @@ TWS断开
 [00:18:13.728][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
 [00:18:21.728][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
 
-断开
+断开手机
 [00:19:15.220][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
 [00:19:15.366][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT
 

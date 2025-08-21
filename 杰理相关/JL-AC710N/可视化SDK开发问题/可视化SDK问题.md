@@ -904,7 +904,7 @@ void lp_touch_key_state_event_deal(u32 ch_idx, u32 event)
             log_debug("falling_res_avg: %d", arg->falling_res_avg);
 #endif
             lp_touch_key_fall_click_handle(ch_idx);
-            //lp_touch_key_send_key_tone_msg();
+            //lp_touch_key_send_key_tone_msg();放里面不行。
 #if TCFG_KEY_TONE_EN
             extern void touch_key_send_key_tone_msg(void);
             touch_key_send_key_tone_msg();
@@ -957,7 +957,182 @@ void lp_touch_key_state_event_deal(u32 ch_idx, u32 event)
 }
 ```
 
+## 添加其他自定义提示音
 
+先导入音源文件。
+
+把输出名称添加到对应位置：
+
+`apps\earphone\include\app_tone.h`
+
+```c
+struct tone_files {
+    const char *num[10];
+    const char *power_on;
+    const char *power_off;
+    const char *bt_mode;
+    const char *bt_connect;
+    const char *bt_disconnect;
+    const char *phone_in;
+    const char *phone_out;
+    const char *phone_active;
+    const char *tws_connect;
+    const char *tws_disconnect;
+    const char *charge_start;
+    const char *charge_full;
+    const char *low_power;
+    const char *max_vol;
+    const char *low_latency_in;
+    const char *low_latency_out;
+    const char *normal;
+    const char *anc_on;
+    const char *anc_trans;
+    const char *anc_off;
+    const char *key_tone;
+    const char *anc_adaptive;
+    const char *anc_adaptive_coeff;
+    const char *anc_normal_coeff;
+    const char *spkchat_on;
+    const char *spkchat_off;
+    const char *winddet_on;
+    const char *winddet_off;
+    const char *wclick_on;
+    const char *wclick_off;
+    const char *linein_mode;
+    const char *pc_mode;
+    const char *music_mode;
+    const char *device_sd;
+    const char *device_udisk;
+    const char *fit_det_on;
+    const char *share_search_pairing;
+    const char *share_wait_pairing;
+    const char *share_conn_master;
+    const char *share_conn_slave;
+    const char *share_disconnect;
+    const char *factory;
+    const char *du；
+};
+```
+
+在对应的中英文处添加路径
+
+- 其实我是没有找到这个路径的
+
+```c
+static const struct tone_files chinese_tone_files = {
+    .num = {
+        "tone_zh/0.*",
+        "tone_zh/1.*",
+        "tone_zh/2.*",
+        "tone_zh/3.*",
+        "tone_zh/4.*",
+        "tone_zh/5.*",
+        "tone_zh/6.*",
+        "tone_zh/7.*",
+        "tone_zh/8.*",
+        "tone_zh/9.*",
+    },
+    .power_on           = "tone_zh/power_on.*",
+    .power_off          = "tone_zh/power_off.*",
+    .bt_mode            = "tone_zh/bt.*",
+    .bt_connect         = "tone_zh/bt_conn.*",
+    .bt_disconnect      = "tone_zh/bt_dconn.*",
+    .phone_in           = "tone_zh/ring.*",
+    .phone_out          = "tone_zh/ring.*",
+    .low_power          = "tone_zh/low_power.*",
+    .max_vol            = "tone_zh/vol_max.*",
+    .tws_connect        = "tone_zh/tws_conn.*",
+    .tws_disconnect     = "tone_zh/tws_dconn.*",
+    .normal             = "tone_zh/normal.*",
+    .low_latency_in     = "tone_zh/game_in.*",
+    .low_latency_out    = "tone_zh/game_out.*",
+    .anc_on    			= "tone_zh/anc_on.*",
+    .anc_trans    		= "tone_zh/anc_trans.*",
+    .anc_off    		= "tone_zh/anc_off.*",
+    .key_tone  		    = "tone_zh/key_tone.*",
+    .anc_adaptive       = "tone_zh/adaptive.*",
+    .anc_adaptive_coeff = "tone_zh/anc_on.*",
+    .anc_normal_coeff   = "tone_zh/anc_on.*",
+    .spkchat_on         = "tone_zh/spkchat_on.*",
+    .spkchat_off        = "tone_zh/spkchat_off.*",
+    .winddet_on         = "tone_zh/winddet_on.*",
+    .winddet_off        = "tone_zh/winddet_off.*",
+    .wclick_on          = "tone_zh/wclick_on.*",
+    .wclick_off         = "tone_zh/wclick_off.*",
+    .linein_mode        = "tone_zh/linein.*",
+    .pc_mode         	= "tone_zh/pc.*",
+    .music_mode         = "tone_zh/music.*",
+    .device_sd          = "tone_zh/sd.*",
+    .device_udisk       = "tone_zh/usb.*",
+    .fit_det_on         = "tone_zh/fit_det_on.*",
+    .share_search_pairing = "tone_zh/sharesearc.*",
+    .share_wait_pairing = "tone_zh/sharewait.*",
+    .share_conn_master = "tone_zh/sharemaster.*",
+    .share_conn_slave = "tone_zh/shareslaver.*",
+    .share_disconnect = "tone_zh/share_dconn.*",
+    .factory = "tone_en/factory.*",
+    .du = "tone_zh/du.*",
+};
+
+static const struct tone_files english_tone_files = {
+    .num = {
+        "tone_en/0.*",
+        "tone_en/1.*",
+        "tone_en/2.*",
+        "tone_en/3.*",
+        "tone_en/4.*",
+        "tone_en/5.*",
+        "tone_en/6.*",
+        "tone_en/7.*",
+        "tone_en/8.*",
+        "tone_en/9.*",
+    },
+    .power_on           = "tone_en/power_on.*",
+    .power_off          = "tone_en/power_off.*",
+    .bt_mode            = "tone_en/bt.*",
+    .bt_connect         = "tone_en/bt_conn.*",
+    .bt_disconnect      = "tone_en/bt_dconn.*",
+    .phone_in           = "tone_en/ring.*",
+    .phone_out          = "tone_en/ring.*",
+    .low_power          = "tone_en/low_power.*",
+    .max_vol            = "tone_en/vol_max.*",
+    .tws_connect        = "tone_en/tws_conn.*",
+    .tws_disconnect     = "tone_en/tws_dconn.*",
+    .normal             = "tone_en/normal.*",
+    .low_latency_in     = "tone_en/game_in.*",
+    .low_latency_out    = "tone_en/game_out.*",
+    .anc_on    			= "tone_en/anc_on.*",
+    .anc_trans    		= "tone_en/anc_trans.*",
+    .anc_off    		= "tone_en/anc_off.*",
+    .key_tone  		    = "tone_en/key_tone.*",
+    .anc_adaptive       = "tone_en/adaptive.*",
+    .anc_adaptive_coeff = "tone_en/anc_on.*",
+    .anc_normal_coeff   = "tone_en/anc_on.*",
+    .spkchat_on         = "tone_en/spkchat_on.*",
+    .spkchat_off        = "tone_en/spkchat_off.*",
+    .winddet_on         = "tone_en/winddet_on.*",
+    .winddet_off        = "tone_en/winddet_off.*",
+    .wclick_on          = "tone_en/wclick_on.*",
+    .wclick_off         = "tone_en/wclick_off.*",
+    .linein_mode        = "tone_en/linein.*",
+    .pc_mode         	= "tone_en/pc.*",
+    .music_mode         = "tone_en/music.*",
+    .device_sd          = "tone_en/sd.*",
+    .device_udisk       = "tone_en/usb.*",
+    .fit_det_on         = "tone_en/fit_det_on.*",
+    .share_search_pairing = "tone_en/sharesearc.*",
+    .share_wait_pairing = "tone_en/sharewait.*",
+    .share_conn_master = "tone_en/sharemaster.*",
+    .share_conn_slave = "tone_en/shareslaver.*",
+    .share_disconnect = "tone_en/share_dconn.*",
+    .factory = "tone_en/factory.*",
+    .du = "tone_en/du.*",
+};
+```
+
+在对应位置调用接口即可。
+
+- `play_tone_file(get_tone_files()->_TONE_KEY_ACTION_DOUBLE_CLICK_NAME);`
 
 # 时钟频率
 
