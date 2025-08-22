@@ -240,3 +240,72 @@ git config pull.rebase false
 ```
 
 这样以后 `git pull` 就直接 merge，不会每个提交都停下来问你。
+
+# 合并分支内容且不带分支的提交历史
+
+切换到目标分支（refactor）
+
+```bash
+git checkout refactor
+```
+
+把 patch_04.05 分支的文件覆盖到工作区
+
+```bash
+git checkout patch_04.05 -- .
+```
+
+- `-- .` 表示把 **patch_04.05** 分支的所有文件内容取过来，但不会带历史记录。
+-  如果只想取某些目录/文件，可以把 `.` 换成具体路径。
+
+查看变化
+
+```bash
+git status
+git diff
+```
+
+- 确认哪些文件被修改/新增/删除。
+
+添加修改到暂存区
+
+```bash
+git add .
+```
+
+提交成一个新的补丁提交
+
+```bash
+git commit -m "Apply changes from patch_04.05 branch"
+```
+
+这样，你就把 **patch_04.05** 的代码内容合并到了 `refactor` 分支上，但提交历史还是保持干净的。
+
+不会直接覆盖你现有代码，放心。
+
+ 关键点在于 **你在 `refactor` 分支上执行 `git checkout patch_04.05 -- .`** 时，Git 的行为是：
+
+- 它会把 **patch_04.05 分支的文件内容**拿到当前工作区。
+- 如果某个文件在两个分支里都有修改：
+  - Git 会直接把 `patch_04.05` 的版本放到工作区，相当于覆盖本地文件。
+  - 但是 **不会自动提交**，你还有机会检查和决定要不要保留。
+
+这种方式没有传统意义的“冲突解决提示”，而是直接拿 `patch_04.05` 的文件替换掉 `refactor` 的对应文件，**由你来决定是否提交**。
+
+- **想要 patch_04.05 的修改直接应用（不关心覆盖）** → 用 `git checkout patch_04.05 -- .`
+
+- **想要保留 refactor 的代码，并手动解决冲突** → 用 `git merge patch_04.05 --allow-unrelated-histories`
+
+其实就是 **把 patch_04.05 分支的文件内容“拷”过来放到工作区**，但是：
+
+- 它不会立刻修改提交历史。
+- 你的 `refactor` 分支的 commit 都还在，完全不动。
+- 你有机会用 `git diff`、`git status` 看清楚哪些文件被改动了。
+- 如果有文件不想要 patch_04.05 的内容，可以 `git restore` 掉，恢复回 refactor 的版本。
+- 最终，你只需要 `git add . && git commit`，就能把这次修改固化成一个新的提交。
+
+这样做的好处是：
+
+-  补丁内容进来了。
+-  不会把两个分支的历史“硬合并”。
+-  你保留了选择权，提交前能随时回退、调整。
