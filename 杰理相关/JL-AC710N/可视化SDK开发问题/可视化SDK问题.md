@@ -1777,3 +1777,5 @@ case KEY_ACTION_DOUBLE_CLICK:
             break;
 ```
 
+# 开机默认媒体音量
+
