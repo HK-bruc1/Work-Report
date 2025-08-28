@@ -60,6 +60,12 @@
 char channel = tws_api_get_local_channel();
 ```
 
+## TWS配对方式
+
+![image-20250828171739529](./可视化SDK问题.assets/image-20250828171739529.png)
+
+修改的是配对方式，而不是把开机自动配对关闭，这样的话搜索不到蓝牙名。
+
 # 按键
 
 ## 通话相关场景下按键流程
@@ -96,6 +102,99 @@ char channel = tws_api_get_local_channel();
 ```
 
 - 多击延迟参数没有看到。
+
+## 多击检测
+
+`apps\common\device\key\key_driver.h`
+
+```c
+enum key_action {
+    KEY_ACTION_CLICK,
+    KEY_ACTION_LONG,
+    KEY_ACTION_HOLD,
+    KEY_ACTION_UP,
+    KEY_ACTION_DOUBLE_CLICK,
+    KEY_ACTION_TRIPLE_CLICK,
+    KEY_ACTION_FOURTH_CLICK,
+    KEY_ACTION_FIFTH_CLICK,
+    KEY_ACTION_SEXTUPLE_CLICK,
+    KEY_ACTION_SEPTUPLE_CLICK,
+    KEY_ACTION_HOLD_1SEC,           //10
+    KEY_ACTION_HOLD_3SEC,
+    KEY_ACTION_HOLD_5SEC,
+    KEY_ACTION_HOLD_8SEC,
+    KEY_ACTION_HOLD_10SEC,
+
+    /* TWS两边同时按下消息 */
+    KEY_ACTION_TWS_CLICK,
+    KEY_ACTION_TWS_DOUBLE_CLICK,
+    KEY_ACTION_TWS_TRIPLE_CLICK,
+    KEY_ACTION_TWS_FOURTH_CLICK,
+    KEY_ACTION_TWS_FIRTH_CLICK,
+    KEY_ACTION_TWS_SEXTUPLE_CLICK,
+    KEY_ACTION_TWS_SEPTUPLE_CLICK,
+    KEY_ACTION_TWS_HOLD_1SEC,
+    KEY_ACTION_TWS_HOLD_3SEC,
+    KEY_ACTION_TWS_HOLD_5SEC,
+    KEY_ACTION_TWS_HOLD_8SEC,
+    KEY_ACTION_TWS_HOLD_10SEC,
+
+    //多击+长按
+    KEY_ACTION_CLICK_PLUS_LONG,         // 单击+长按
+    KEY_ACTION_DOUBLE_CLICK_PLUS_LONG,  // 双击+长按
+    KEY_ACTION_TRIPLE_CLICK_PLUS_LONG,  // 三击+长按
+    KEY_ACTION_QUAD_CLICK_PLUS_LONG,    // 四击+长按
+
+    /*=======新增按键动作请在此处之上增加，不建议中间插入，可能影响基于偏移量计算的功能，比如多击判断流程=======*/
+    KEY_ACTION_NO_KEY,
+    KEY_ACTION_MAX,
+};
+```
+
+### 扩展触摸多击检测
+
+- `cpu\components\touch\lp_touch_key_click.c`
+
+```c
+static void lp_touch_key_short_click_time_out_handle(void *priv)
+{
+    u32 ch_idx = (u32)priv;
+    const struct touch_key_cfg *key_cfg = &(__this->pdata->key_cfg[ch_idx]);
+    struct touch_key_arg *arg = &(__this->arg[ch_idx]);
+
+    struct key_event e;
+    switch (arg->click_cnt) {
+    case 1:
+        e.event = KEY_ACTION_CLICK;
+        break;
+    case 2:
+        e.event = KEY_ACTION_DOUBLE_CLICK;
+        break;
+    case 3:
+        e.event = KEY_ACTION_TRIPLE_CLICK;
+        break;
+    case 4:
+        e.event = KEY_ACTION_FOURTH_CLICK;
+        break;
+    case 5:
+        e.event = KEY_ACTION_FIFTH_CLICK;
+        break;
+    default:
+        e.event = KEY_ACTION_NO_KEY;
+        break;
+    }
+    e.value = key_cfg->key_value;
+
+    log_debug("notify key:%d short event, cnt: %d", ch_idx, arg->click_cnt);
+    lp_touch_key_notify_key_event(&e, ch_idx);
+
+    arg->short_timer = 0;
+    arg->last_key = 0;
+    arg->click_cnt = 0;
+}
+```
+
+
 
 # 恢复出厂设置
 
@@ -656,43 +755,63 @@ TWS相关的灯效
   - TWS连接
   - TWS断开？？？
 
-## 灯效流程
+## 低电关机灯效定制化
 
-### 单耳
-
-**开机**
-
-1. `[LED_UI]APP_MSG_POWER_ON`
-2. `[LED_UI]led_enter_mode--APP_MODE_POWERON`
-3. `[LED_UI]ui_app_msg_handler--APP_MSG_TWS_UNPAIRED`
-4. `[LED_UI]APP_MSG_BT_IN_PAIRING_MODE`
-5. `[LED_UI]ui_bt_stack_msg_handler--BT_STATUS_FIRST_CONNECTED`
-6. `[LED_UI]ui_bt_stack_msg_handler--BT_STATUS_FIRST_CONNECTED`
-7. `[LED_UI]BT_STATUS_FIRST_DISCONNECT--BT_STATUS_SECOND_DISCONNECT`
-   - 连接时断开出现
-   - `[LED_UI]APP_MSG_BT_IN_PAIRING_MODE`
-     - 断开后会出现
-
-**关机**
-
-1. `[LED_UI]APP_MSG_POWER_OFF`
-
-## 函数调用链
-
-## 超距灯效
+`apps\earphone\battery\battery_level.c`
 
 ```c
-[00:02:42.184][LED_UI]---------------------------------------------------BT disconnect: event=0x9, reason=0x0
-[00:02:42.186][LED_UI]Normal disconnect - setting search LED effect-----------------------------------------------------
-[00:02:42.187][PWM_LED]led_name = 31, disp_mode = 0x2
-[00:02:42.188][EARPHONE]-----------bt_hci_event_handler reason 5 8
-[00:02:42.189][EARPHONE]----------------------------HCI_EVENT_DISCONNECTION_COMPLETE 
+static void power_warning_timer(void *p)
+{
+    batmgr_send_msg(POWER_EVENT_POWER_WARNING, 0);
+}
 
-67 F8 58 B3 CC A4 
-[00:02:42.190][EARPHONE]HCI_EVENT_DISCONNECTION_COMPLETE---------------------------ERROR_CODE_CONNECTION_TIMEOUT 
+static int app_power_event_handler(int *msg)
+{
+    int ret = false;
+
+#if(TCFG_SYS_LVD_EN == 1)
+    switch (msg[0]) {
+    case POWER_EVENT_POWER_NORMAL:
+        break;
+    case POWER_EVENT_POWER_WARNING:
+        play_tone_file(get_tone_files()->low_power);
+        if (lowpower_timer == 0) {
+            //这里实现定时低电播报
+            lowpower_timer = sys_timer_add(NULL, power_warning_timer, LOW_POWER_WARN_TIME);
+        }
+        break;
+    case POWER_EVENT_POWER_LOW:
+        //这里时低电关机的消息处理
+        r_printf(" POWER_EVENT_POWER_LOW");
+        vbat_timer_delete();
+        if (lowpower_timer) {
+            sys_timer_del(lowpower_timer);
+            lowpower_timer = 0 ;
+        }
+#if TCFG_APP_BT_EN
+#if (RCSP_ADV_EN)
+        adv_tws_both_in_charge_box(1);
+#endif
+        if (!app_in_mode(APP_MODE_IDLE)) {
+            //蓝牙模式下单独关机
+            sys_enter_soft_poweroff(POWEROFF_NORMAL);
+        } else {
+            //否则无声关机
+            power_set_soft_poweroff();
+        }
+#else
+        app_send_message(APP_MSG_GOTO_MODE, APP_MODE_IDLE | (IDLE_MODE_PLAY_POWEROFF << 8));
+#endif
+        break;
 ```
 
-此时灯效已经更新了BT_STATUS_FIRST_DISCONNECT状态。
+- 关机流程中利用了全局变量的关机标志位
+  - 可以新增一个全局变量，在这里置1。
+  - 在关机流程中判断，如果是1的话，则发送另一个app层灯效消息。
+  - 这样低电关机也可以有专属灯效。
+- `APP_VAR app_var;`
+  - 在哪里初始化？
+  - 初始化?
 
 # DUT
 
@@ -1778,4 +1897,17 @@ case KEY_ACTION_DOUBLE_CLICK:
 ```
 
 # 开机默认媒体音量
+
+- `apps\earphone\audio\vol_sync.c`
+
+```c
+#if _TCFG_ONE_CONN_VOL_SET_ENABLE
+/*  -> 初始化音量设置，CONFIG_VOL_SCALE设置百分比(整数)*/
+#define CONFIG_VOL_SCALE    _CONFIG_VOL_SCALE   
+u8 need_default_volume = (u8)(127*CONFIG_VOL_SCALE/10); 
+/*  -> sync_default_volume_every_time 改成0为手机连接时记忆上次的音量（有记录），1 手机连接时无论是否有记录都不记忆,输出指定音量*/
+u8 sync_default_volume_every_time = _CONFIG_REMEMBER_VOLUME ;
+/* ->  lib_btctrler_config.c config_delete_link_key变量也要改成0*/
+#endif
+```
 
