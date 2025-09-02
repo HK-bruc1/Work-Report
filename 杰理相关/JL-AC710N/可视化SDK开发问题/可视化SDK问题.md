@@ -51,6 +51,141 @@
 }
 ```
 
+这个长按唤醒参数没有作用。
+
+在长按唤醒日志中发现：
+
+```c
+__INITCALL_BANK_CODE
+static struct app_mode *app_task_init()
+{
+    app_var_init();
+    app_version_check();
+
+#ifndef CONFIG_CPU_BR56
+    sdfile_init();
+    syscfg_tools_init();
+#endif
+    cfg_file_parse(0);
+
+    jlstream_init();
+
+    do_early_initcall();
+    board_init();
+    do_platform_initcall();
+
+#if (defined(TCFG_DEBUG_DLOG_ENABLE) && TCFG_DEBUG_DLOG_ENABLE)
+    dlog_init();
+    dlog_enable(1);
+    extern void dlog_uart_auto_enable_init(void);
+    extern int dlog_uart_output_set(enum DLOG_OUTPUT_TYPE type);
+    dlog_uart_output_set(DLOG_OUTPUT_2_FLASH | dlog_output_type_get());
+    dlog_uart_auto_enable_init();
+#endif
+
+    key_driver_init();
+
+    do_initcall();
+    do_module_initcall();
+    do_late_initcall();
+
+    dev_manager_init();
+
+
+    int update = 0;
+    if (CONFIG_UPDATE_ENABLE) {
+        update = update_result_deal();
+    }
+#if TCFG_MC_BIAS_AUTO_ADJUST
+    mic_capless_trim_init(update);
+#endif
+
+    int msg[4] = { MSG_FROM_APP, APP_MSG_GOTO_MODE, 0, 0 };
+
+    if (get_charge_online_flag()) {
+#if(TCFG_SYS_LVD_EN == 1)
+        vbat_check_init();
+#endif
+        msg[2] = APP_MODE_IDLE | (IDLE_MODE_CHARGE << 8);
+    } else {
+        msg[2] = APP_MODE_POWERON;
+        check_power_on_voltage();//有一堆电量日志
+        app_poweron_check(update);//如果是长按的话还有“++”的日志，长按唤醒参数跟这里有关
+
+        app_send_message(APP_MSG_POWER_ON, 0);
+    }
+
+#if TCFG_CHARGE_ENABLE
+    set_charge_event_flag(1);
+#endif
+
+    struct app_mode *mode;
+    mode = app_mode_switch_handler(msg);
+    ASSERT(mode != NULL);
+    return mode;
+}
+
+
+
+/*充电拔出,CPU软件复位, 不检测按键，直接开机*/
+__INITCALL_BANK_CODE
+static void app_poweron_check(int update)
+{
+#if (CONFIG_BT_MODE == BT_NORMAL)
+    if (!update && cpu_reset_by_soft()) {
+        app_var.play_poweron_tone = 0;
+        return;
+    }
+#if TCFG_CHARGE_ENABLE
+    if (is_ldo5v_wakeup()) {
+#if TCFG_CHARGE_OFF_POWERON_EN
+        app_var.play_poweron_tone = 0;
+        app_var.poweron_reason = SYS_POWERON_BY_OUT_BOX;
+        return;
+#else
+        //拔出关机
+        power_set_soft_poweroff();
+#endif
+    }
+#endif
+
+#if TCFG_AUTO_POWERON_ENABLE
+    return;
+#endif
+    check_power_on_key();//上电自动开机关闭就会走这里。
+
+#endif
+}
+
+
+__INITCALL_BANK_CODE
+void check_power_on_key(void)
+{
+    u32 delay_10ms_cnt = 0;
+
+    while (1) {
+        wdt_clear();
+        os_time_dly(1);
+
+        if (get_power_on_status()) {
+            putchar('+');
+            delay_10ms_cnt++;
+            if (delay_10ms_cnt > 500) {//这个数值就可以影响唤醒时间。不知道是否通用。IO按键已经验证。
+                app_var.poweron_reason = SYS_POWERON_BY_KEY;
+                return;
+            }
+        } else {
+            log_info("enter softpoweroff\n");
+            delay_10ms_cnt = 0;
+            app_var.poweroff_reason = SYS_POWEROFF_BY_KEY;
+            power_set_soft_poweroff();
+        }
+    }
+}
+```
+
+
+
 # TWS相关
 
 ## 获取本地声道
@@ -103,7 +238,7 @@ char channel = tws_api_get_local_channel();
 
 - 多击延迟参数没有看到。
 
-## 多击检测
+## 多击检测（触摸按键）
 
 `apps\common\device\key\key_driver.h`
 
