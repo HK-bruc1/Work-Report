@@ -309,3 +309,24 @@ git commit -m "Apply changes from patch_04.05 branch"
 -  补丁内容进来了。
 -  不会把两个分支的历史“硬合并”。
 -  你保留了选择权，提交前能随时回退、调整。
+
+# 推送所有标签
+
+在 Git 中推送所有本地标签（tags）到远程仓库，可以使用以下命令：
+
+```bash
+git push origin --tags
+```
+
+说明：
+
+- `origin` 是远程仓库的默认名字，如果远程仓库名字不同，需要替换为对应的名称。
+- `--tags` 参数会把本地所有还未推送到远程的标签一次性推送上去。
+
+如果你只想推送某一个标签，可以用：
+
+```bash
+git push origin <tagname>
+git push origin v1.0.0
+```
+
