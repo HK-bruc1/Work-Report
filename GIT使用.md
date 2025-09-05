@@ -330,3 +330,55 @@ git push origin <tagname>
 git push origin v1.0.0
 ```
 
+# 解决合并冲突后
+
+强制推送到git远程仓库，本地强制覆盖远程，不管冲突的命名
+
+```bash
+git push origin <分支名> --force
+```
+
+这样会让远程分支的内容被你本地当前分支的提交历史覆盖，远程上与本地不一致的提交会被丢弃。
+
+如果没有设置上游分支，需要先指定一次：
+
+```bash
+git push -u origin 当前分支名 --force
+```
+
+以后就可以省略分支名了。
+
+```bash
+git push --force
+//git push -f
+```
+
+# 强行合并分支
+
+我的当前分支是dev,我要强制合并feature_wfx分支。所有冲突都选择feature_wfx分支内容
+
+```bash
+# 确保在 dev 分支
+git checkout dev
+
+# 合并时冲突自动选择 feature_wfx 的内容
+git merge feature_wfx -X theirs
+```
+
+`-X theirs` 在 `git merge` 的语境下指的是：**遇到冲突时优先使用被合并分支（这里就是 feature_wfx）的版本**。
+
+如果你想要不留痕迹地直接让 `dev` 变成 `feature_wfx` 的内容，可以考虑用 `git reset` 或 `git checkout` 强制覆盖，但那样会丢弃 `dev` 的历史。
+
+另一种更“绝对”的方式（直接用 `feature_wfx` 覆盖 `dev` 的所有内容）：
+
+```bash
+# 切换到 dev
+git checkout dev
+
+# 让 dev 和 feature_wfx 内容完全一致（但保留 dev 分支名）
+git reset --hard feature_wfx
+```
+
+`merge -X theirs`：保留两边的提交历史，只是自动解决冲突时选择 `feature_wfx`。
+
+`reset --hard feature_wfx`：直接让 `dev` 内容等于 `feature_wfx`，相当于放弃 `dev` 上的所有差异。
