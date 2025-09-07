@@ -2054,3 +2054,120 @@ u8 sync_default_volume_every_time = _CONFIG_REMEMBER_VOLUME ;
 #endif
 ```
 
+# 低功耗
+
+## 带功放的低功耗
+
+前提是一开始功放随着开机要打开，不然会丢失很多声音。后面才交给低功耗检测来确定是否开关。
+
+- 写在里面是因为有开机提示音，更加直观。
+
+```c
+static int poweron_mode_init()
+{
+    log_info("power on");
+#if _DAC_PA_EN
+    //手动开启功放，在这里打开不会丢掉开机提示音
+    extern void user_pa_deal(u8 enable);
+    user_pa_deal(1);
+#endif
+    if (app_var.play_poweron_tone) {
+        int ret = play_tone_file_callback(get_tone_files()->power_on, NULL, poweron_tone_play_end_callback);
+        if (ret != 0) {
+            log_error("power on tone play err!!!");
+            poweron_task_start();
+        }
+    } else {
+        poweron_task_start();
+    }
+    app_send_message(APP_MSG_ENTER_MODE, APP_MODE_POWERON);
+    return 0;
+}
+
+struct app_mode *app_enter_poweron_mode(int arg)
+{
+    int msg[16];
+    struct app_mode *next_mode;
+
+    poweron_mode_init();
+
+    while (1) {
+        if (!app_get_message(msg, ARRAY_SIZE(msg), NULL)) {
+            continue;
+        }
+        next_mode = app_mode_switch_handler(msg);
+        if (next_mode) {
+            break;
+        }
+
+        switch (msg[0]) {
+        case MSG_FROM_APP:
+            break;
+        case MSG_FROM_DEVICE:
+            break;
+        }
+
+        app_default_msg_handler(msg);
+    }
+
+    poweron_mode_exit();
+
+    return next_mode;
+}
+```
+
+`apps\earphone\mode\bt\sniff.c`
+
+- 注册到os的任务，两边都可以执行到。
+
+```c
+static int sniff_btstack_event_handler(int *_event)
+{
+    struct bt_event *bt = (struct bt_event *)_event;
+
+    switch (bt->event) {
+    case BT_STATUS_SECOND_CONNECTED:
+    case BT_STATUS_FIRST_CONNECTED:
+        sys_auto_sniff_controle(1, bt->args);
+        break;
+    case BT_STATUS_SNIFF_STATE_UPDATE:
+        log_info(" BT_STATUS_SNIFF_STATE_UPDATE %d\n", bt->value);    //0退出SNIFF
+        if (bt->value == 0) {
+            #if _DAC_PA_EN
+                //这里没有看到是从机返回应该是两个一起的，sys_auto_sniff_controle这个才分主从。
+                //放在后面也行，这个验证过了。
+                //还是放在前面，里面有从机的return,虽然依然可以执行到
+                //不要写进入，就算把从机return注释掉，也还是会有单边功耗问题，697就是。
+                extern void user_pa_deal(u8 enable);
+                user_pa_deal(1);
+                log_info("APP_MSG_BT_EXIT_SNIFF---------------------------user_pa_deal(1);\n");
+            #endif
+            sys_auto_sniff_controle(1, bt->args);
+            app_send_message(APP_MSG_BT_EXIT_SNIFF, 0);
+        } else {
+            #if _DAC_PA_EN
+                //这里没有看到是从机返回应该是两个一起的，sys_auto_sniff_controle这个才分主从。
+                //放在后面也行，这个验证过了。
+                //还是放在前面，里面有从机的return,虽然依然可以执行到
+                //不要写进入，就算把从机return注释掉，也还是会有单边功耗问题，697就是。
+                extern void user_pa_deal(u8 enable);
+                user_pa_deal(0);
+                log_info("APP_MSG_BT_ENTER_SNIFF---------------------------user_pa_deal(0);\n");
+            #endif
+            sys_auto_sniff_controle(0, bt->args);
+            app_send_message(APP_MSG_BT_ENTER_SNIFF, 0);
+        }
+        break;
+    }
+    return 0;
+}
+APP_MSG_HANDLER(sniff_btstack_msg_stub) = {
+    .owner      = 0xff,
+    .from       = MSG_FROM_BT_STACK,
+    .handler    = sniff_btstack_event_handler,
+};
+```
+
+后续如果还有低功耗问题可以添加的地方：
+
+在有关调用`sys_auto_sniff_controle`d的地方，还可以加功放的开启与关闭。

@@ -872,7 +872,7 @@ rcsp_device_status_set()
 
 ## 6.打印验证
 
-### 操作EQ的调用路径
+### 厂商APP操作EQ的调用路径
 
 ```c
 // 设备状态更改
@@ -944,7 +944,7 @@ post调用rcsp_common_event_deal
         break;
 ```
 
-### APP中操作音量流程分析
+### 厂商APP中操作音量流程分析
 
 ```
 [00:18:21.883][clock-manager]cpu0: 1% cpu1: 0% jlstream: 0% curr_clk:192000000  min_clk:24000000 dest_clk:24000000, 1
@@ -1135,7 +1135,7 @@ void set_music_device_volume(int volume) {
 [00:18:23.378][SW_DVOL]Gain:16,AVOL:3,DVOL:16384  ← 软件数字音量控制
 ```
 
-### 两种音量控制方式对比
+#### 两种音量控制方式对比
 
 **AVRCP协议音量控制（实际APP使用）vs RCSP协议音量控制（理论支持）：**
 
@@ -1158,7 +1158,7 @@ void set_music_device_volume(int volume) {
 
 4. **TWS同步** - AVRCP方式通过TWS内部机制同步，RCSP方式通过RCSP协议同步
 
-### EQ与音量控制流程总结
+#### EQ与音量控制流程总结
 
 **EQ控制** (走RCSP协议)：
 ```
@@ -1170,7 +1170,292 @@ APP调节EQ → BLE GATT → RCSP协议解析 → function=0xFF分支 → common
 APP调节音量 → AVRCP协议 → BT_STATUS_AVRCP_VOL_CHANGE → avrcp_vol_chance_timeout() → set_music_device_volume()
 ```
 
-这解释了为什么你的日志中看到EQ走了我们分析的RCSP流程，而音量控制走了完全不同的AVRCP流程。两者使用不同的蓝牙协议栈来实现各自的功能
+这解释了为什么你的日志中看到EQ走了我们分析的RCSP流程，而音量控制走了完全不同的AVRCP流程。两者使用不同的蓝牙协议栈来实现各自的功能。
+
+### 自定义APP设置触摸按键功能指令流程
+
+日志：
+
+```c
+[00:16:02.936][LMP]lmp_rx_unsniff_req_redeal:0x4197b0
+[00:16:02.937]link_conn_exit_sniff
+[00:16:02.937][BDMGR]sort_1_edr
+edr 96 20 16 (48 1)
+ide 1000
+[00:16:02.938]overwirte rx_unsniff_over
+[00:16:02.939][BDMGR]sort_1_edr
+edr 100 (48 0)
+[00:16:02.941][EARPHONE] BT STATUS DEFAULT
+[00:16:02.941][SNIFF] BT_STATUS_SNIFF_STATE_UPDATE 0
+[00:16:02.942][SNIFF]check_sniff_enable
+[00:16:02.943]dual_conn_btstack_event_handler:32
+[00:16:02.943][EARPHONE] BT STATUS DEFAULT
+[00:16:02.944]ui_bt_stack_msg_handler:32
+[00:16:02.945][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:16:02.950]online_spp_rx(14) 
+[00:16:02.951]tws_online_spp_in_task
+[00:16:02.951]ONLINE_SPP_DATA0000
+
+FE DC BA C0 C0 00 06 B2 04 02 01 01 04 EF 
+[00:16:02.953]JL_rcsp_adv_cmd_resp
+[00:16:02.953] JL_OPCODE_SET_ADV
+[00:16:02.954]JL_opcode_set_adv_info:
+04 02 01 01 04 
+[00:16:05.734]online_spp_rx(13) 
+[00:16:05.735]tws_online_spp_in_task
+[00:16:05.735]ONLINE_SPP_DATA0000
+
+FE DC BA C0 C1 00 05 B3 FF FF FF FF EF 
+[00:16:05.737]JL_rcsp_adv_cmd_resp
+[00:16:05.737] JL_OPCODE_GET_ADV
+[00:16:05.738]FEATURE MASK : ffffffff
+[00:16:05.738]ATTR_TYPE_BAT_VALUE
+[00:16:05.739]ATTR_TYPE_EDR_NAME
+[00:16:05.739]ATTR_TYPE_KEY_SETTING
+[00:16:05.740]ATTR_TYPE_ANC_VOICE_KEY
+[00:16:05.740]ATTR_TYPE_MIC_SETTING
+[00:16:05.741]ATTR_TYPE_WORK_MODE
+[00:16:05.741]ATTR_TYPE_PRODUCT_MESSAGE
+04 00 64 00 00 09 01 44 34 31 5F 37 31 30 36 19 
+02 01 01 04 02 01 05 01 02 04 02 02 04 01 03 0C 
+02 03 0C 01 04 03 02 04 03 05 0A 00 00 00 07 02 
+04 01 02 05 01 07 06 05 D6 01 23 00 03 
+[00:16:07.943][SNIFF]-----USER SEND SNIFF IN 0 1
+[00:16:07.944][AVCTP]role 0 
+[00:16:07.944][LMP]HCI_SNIFF_MODE=800,100,4,1
+[00:16:07.945][BDMGR]add_timing2: edr 1 768 10, 0
+[00:16:07.963][BDMGR]add_timing2: edr 1 768 10, 16
+[00:16:07.964][EARPHONE] BT STATUS DEFAULT
+[00:16:07.964][SNIFF] BT_STATUS_SNIFF_STATE_UPDATE 2
+[00:16:07.966][LINK]link_sniff_init_lp_ws 0
+[00:16:07.966][BDMGR]sort_1_edr
+[00:16:07.967]	
+edr 768 10 16 (48 1)
+ide 1000
+[00:16:07.967][SNIFF]check_sniff_disable
+[00:16:07.968]dual_conn_btstack_event_handler:32
+[00:16:07.969][EARPHONE] BT STATUS DEFAULT
+[00:16:07.969]ui_bt_stack_msg_handler:32
+[00:16:07.970][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATES
+```
+
+- 他是怎么覆盖原来的按键映射流程的？
+
+#### 调用链
+
+```c
+static void online_spp_recieve_cbk(void *hdl, void *remote_addr, u8 *buf, u16 len)
+{
+    log_info("online_spp_rx(%d) \n", len);
+    /* log_info_hexdump(buf, len); */
+    tws_online_spp_send(ONLINE_SPP_DATA, buf, len, 1);
+}
+
+void tws_online_spp_send(u8 cmd, u8 *_data, u16 len, u8 tx_do_action)
+{
+    u8 *data = malloc(len + 4 + 4);
+    data[0] = cmd;
+    data[1] = tx_do_action;
+    little_endian_store_16(data, 2, len);
+    memcpy(data + 4, _data, len);
+#if TCFG_USER_TWS_ENABLE
+    if (tws_api_get_role() == TWS_ROLE_SLAVE) {
+        // TWS 从机不需要同步给主机
+        //从机执行这个就返回了。
+        tws_online_spp_in_task(data);
+        return;
+    }
+    int err = tws_api_send_data_to_sibling(data, len + 4, 0x096A5E82);
+    if (err) {
+        tws_online_spp_in_task(data);
+    } else {
+        free(data);
+    }
+#else
+    tws_online_spp_in_task(data);
+#endif
+}
+
+static void tws_online_spp_in_task(u8 *data)
+{
+    printf("tws_online_spp_in_task");
+    u16 data_len = little_endian_read_16(data, 2);
+    switch (data[0]) {
+    case ONLINE_SPP_CONNECT:
+        puts("ONLINE_SPP_CONNECT000\n");
+        db_api->init(DB_COM_TYPE_SPP);
+        db_api->register_send_data(online_spp_send_data);
+#if (TCFG_ANC_TOOL_DEBUG_ONLINE && TCFG_AUDIO_ANC_ENABLE)
+        app_anctool_spp_connect();
+#endif
+        break;
+    case ONLINE_SPP_DISCONNECT:
+        puts("ONLINE_SPP_DISCONNECT000\n");
+        db_api->exit();
+#if (TCFG_ANC_TOOL_DEBUG_ONLINE && TCFG_AUDIO_ANC_ENABLE)
+        app_anctool_spp_disconnect();
+#endif
+        break;
+    case ONLINE_SPP_DATA:
+        puts("ONLINE_SPP_DATA0000\n");
+        log_info_hexdump(&data[4], data_len);
+#if (TCFG_ANC_TOOL_DEBUG_ONLINE && TCFG_AUDIO_ANC_ENABLE)
+        if (app_anctool_spp_rx_data(&data[4], data_len)) {
+            free(data);
+            return;
+        }
+#endif
+#if TCFG_CFG_TOOL_ENABLE
+        if (!cfg_tool_combine_rx_data(&data[4], data_len)) {
+            free(data);
+            return;
+        }
+#endif
+        db_api->packet_handle(&data[4], data_len);
+
+        //loop send data for test
+        /* if (online_spp_send_data_check(data_len)) { */
+        /*online_spp_send_data(&data[4], data_len);*/
+        /* } */
+        break;
+    }
+    free(data);
+}
+
+//中途不知道执行了哪里
+
+int JL_rcsp_adv_cmd_resp(void *priv, u8 OpCode, u8 OpCode_SN, u8 *data, u16 len, u16 ble_con_handle, u8 *spp_remote_addr)
+{
+    rcsp_printf("JL_rcsp_adv_cmd_resp\n");
+    switch (OpCode) {
+    case JL_OPCODE_SET_ADV:
+        rcsp_printf(" JL_OPCODE_SET_ADV\n");
+        JL_opcode_set_adv_info(priv, OpCode, OpCode_SN, data, len, ble_con_handle, spp_remote_addr);
+        break;
+    case JL_OPCODE_GET_ADV:
+        rcsp_printf(" JL_OPCODE_GET_ADV\n");
+        JL_opcode_get_adv_info(priv, OpCode, OpCode_SN, data, len, ble_con_handle, spp_remote_addr);
+        break;
+    case JL_OPCODE_ADV_NOTIFY_SETTING:
+        rcsp_printf(" JL_OPCODE_ADV_NOTIFY_SETTING\n");
+        bt_ble_adv_ioctl(BT_ADV_SET_NOTIFY_EN, *((u8 *)data), 1);
+        JL_CMD_response_send(OpCode, JL_PRO_STATUS_SUCCESS, OpCode_SN, NULL, 0, ble_con_handle, spp_remote_addr);
+        break;
+    case JL_OPCODE_ADV_DEVICE_REQUEST:
+        rcsp_printf("JL_OPCODE_ADV_DEVICE_REQUEST\n");
+        break;
+    default:
+        return 1;
+    }
+    return 0;
+}
+
+static u32 JL_opcode_set_adv_info(void *priv, u8 OpCode, u8 OpCode_SN, u8 *data, u16 len, u16 ble_con_handle, u8 *spp_remote_addr)
+{
+    rcsp_printf("JL_opcode_set_adv_info:\n");
+    rcsp_printf_buf(data, len);
+    u8 offset = 0;
+    while (offset < len) {
+        offset += adv_set_deal_one_attr(data, len, offset);
+    }
+    u8 ret = 0;
+    if (adv_setting_result) {
+        ret = adv_setting_result;
+        JL_CMD_response_send(OpCode, JL_PRO_STATUS_SUCCESS, OpCode_SN, &ret, 1, ble_con_handle, spp_remote_addr);
+    } else {
+        JL_CMD_response_send(OpCode, JL_PRO_STATUS_SUCCESS, OpCode_SN, &ret, 1, ble_con_handle, spp_remote_addr);
+    }
+#if TCFG_RCSP_DUAL_CONN_ENABLE
+    // 一拖二则需要手机重新拉取C0设置的设备信息
+    u8 adv_cmd = 0x0;
+    adv_info_device_request(&adv_cmd, sizeof(adv_cmd));
+#endif
+    return 0;
+}
+
+static u32 JL_opcode_get_adv_info(void *priv, u8 OpCode, u8 OpCode_SN, u8 *data, u16 len, u16 ble_con_handle, u8 *spp_remote_addr)
+{
+    u8 buf[256];
+    u8 offset = 0;
+
+    u32 ret = 0;
+    u32 mask = READ_BIG_U32(data);
+    rcsp_printf("FEATURE MASK : %x\n", mask);
+    /* #define ATTR_TYPE_BAT_VALUE      (0) */
+    /* #define ATTR_TYPE_EDR_NAME       (1) */
+    //get version
+    if (mask & BIT(ATTR_TYPE_BAT_VALUE)) {
+        rcsp_printf("ATTR_TYPE_BAT_VALUE\n");
+        u8 bat[3];
+        bt_adv_get_bat(bat);
+        offset += add_one_attr(buf, sizeof(buf), offset, ATTR_TYPE_BAT_VALUE, bat, 3);
+    }
+
+#if RCSP_ADV_NAME_SET_ENABLE
+    if (mask & BIT(ATTR_TYPE_EDR_NAME)) {
+        rcsp_printf("ATTR_TYPE_EDR_NAME\n");
+        offset += rcsp_adv_get_and_fill_adv_info(buf, sizeof(buf), offset, ATTR_TYPE_EDR_NAME);
+    }
+#endif // RCSP_ADV_NAME_SET_ENABLE
+
+#if RCSP_ADV_KEY_SET_ENABLE
+    if (mask & BIT(ATTR_TYPE_KEY_SETTING)) {
+        rcsp_printf("ATTR_TYPE_KEY_SETTING\n");
+        offset += rcsp_adv_get_and_fill_adv_info(buf, sizeof(buf), offset, ATTR_TYPE_KEY_SETTING);
+    }
+    if (mask & BIT(ATTR_TYPE_ANC_VOICE_KEY)) {
+        rcsp_printf("ATTR_TYPE_ANC_VOICE_KEY\n");
+        offset += rcsp_adv_get_and_fill_adv_info(buf, sizeof(buf), offset, ATTR_TYPE_ANC_VOICE_KEY);
+    }
+#endif // RCSP_ADV_KEY_SET_ENABLE
+
+#if RCSP_ADV_LED_SET_ENABLE
+    if (mask & BIT(ATTR_TYPE_LED_SETTING)) {
+        rcsp_printf("ATTR_TYPE_LED_SETTING\n");
+        offset += rcsp_adv_get_and_fill_adv_info(buf, sizeof(buf), offset, ATTR_TYPE_LED_SETTING);
+    }
+#endif // RCSP_ADV_LED_SET_ENABLE
+
+#if RCSP_ADV_MIC_SET_ENABLE
+    if (mask & BIT(ATTR_TYPE_MIC_SETTING)) {
+        rcsp_printf("ATTR_TYPE_MIC_SETTING\n");
+        offset += rcsp_adv_get_and_fill_adv_info(buf, sizeof(buf), offset, ATTR_TYPE_MIC_SETTING);
+    }
+#endif // RCSP_ADV_MIC_SET_ENABLE
+
+#if RCSP_ADV_WORK_SET_ENABLE
+    if (mask & BIT(ATTR_TYPE_WORK_MODE)) {
+        rcsp_printf("ATTR_TYPE_WORK_MODE\n");
+        offset += rcsp_adv_get_and_fill_adv_info(buf, sizeof(buf), offset, ATTR_TYPE_WORK_MODE);
+    }
+#endif // RCSP_ADV_WORK_SET_ENABLE
+
+#if RCSP_ADV_PRODUCT_MSG_ENABLE
+    if (mask & BIT(ATTR_TYPE_PRODUCT_MESSAGE)) {
+        rcsp_printf("ATTR_TYPE_PRODUCT_MESSAGE\n");
+        u16 vid = get_vid_pid_ver_from_cfg_file(GET_VID_FROM_EX_CFG);
+        u16 pid = get_vid_pid_ver_from_cfg_file(GET_PID_FROM_EX_CFG);
+        u8 tversion[6];
+        tversion[0] = 0x05;
+        tversion[1] = 0xD6;
+        tversion[3] = vid & 0xFF;
+        tversion[2] = vid >> 8;
+        tversion[5] = pid & 0xFF;
+        tversion[4] = pid >> 8;
+        offset += add_one_attr(buf, sizeof(buf), offset, ATTR_TYPE_PRODUCT_MESSAGE, (void *)tversion, 6);
+    }
+#endif // RCSP_ADV_PRODUCT_MSG_ENABLE
+
+    rcsp_printf_buf(buf, offset);
+
+    ret = JL_CMD_response_send(OpCode, JL_PRO_STATUS_SUCCESS, OpCode_SN, buf, offset, ble_con_handle, spp_remote_addr);
+
+    return ret;
+}
+```
+
+- 跟SPP还有关？
+- APP指令在哪里被处理的？
 
 ## 7. AVRCP协议架构与流程分析
 
