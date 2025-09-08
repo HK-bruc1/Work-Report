@@ -1,3 +1,30 @@
+# 数据包格式示例
+
+耳机的功能：一个按键，单击暂停播放，双击下一曲，三击上一曲，长按开关机，内置3种EQ模式，支持修改EQ模式和EQ参数，支持双备份OTA升级。
+
+手机APP的功能：可以控制耳机执行暂停播放和上下曲，可以修改耳机的音量，可以修改耳机的EQ模式和EQ参数，可以获取耳机的播放状态，可以获取耳机的音量，可以获取耳机的EQ模式和EQ参数，可以给耳机进行OTA升级。
+
+手机和耳机约定使用SPP进行通信，同时约定使用如下的协议进行数据传输：
+
+| 包头   | LEN  | CMD      | PARAM   | CRC      |
+| ------ | ---- | -------- | ------- | -------- |
+| 0x1234 | n    | 一个字节 | n个字节 | 一个字节 |
+
+CMD命令列表：
+
+| 0x01 | 控制耳机的暂停播放，后接1个字节PARAM数据，0x00表示要控制耳机暂停，0x01表示要控制耳机播放，耳机执行成功后需要给手机回复相同数据。 |
+| ---- | ------------------------------------------------------------ |
+| 0x02 | 控制耳机端上下曲功能，后接1个字节PARAM数据，0x00表示要控制耳机下一曲，0x01表示要控制耳机上一曲，耳机执行成功后需要给手机回复相同数据。 |
+| 0x03 | 修改耳机的音量，后接1个字节PARAM数据，表示需要修改的音量大小，范围是0~16，耳机执行成功后需要给手机回复相同数据。 |
+| 0x04 | 修改耳机的EQ模式，后接1个字节PARAM数据，表示需要修改的模式，范围0~2，耳机执行成功后需要给手机回复相同数据。 |
+| 0x05 | 修改耳机的EQ参数，后接10个字节PARAM数据，每个字节表示一个EQ频点的增益，增益的范围是-12~12，耳机执行成功后需要给手机回复相同数据。 |
+| 0x06 | 获取耳机当前的播放状态，后面没有PARAM数据，耳机收到该指令，要按照协议格式给手机回复耳机状态，回复时CMD填0x06，耳机正在播放时PARAM填写0x01，否则PARAM填写0x00。耳机本地播放状态变化时，也需要主动上报变化后的状态。 |
+| 0x07 | 获取耳机当前的音量大小，后面没有PARAM数据，耳机收到该指令，要按照协议格式给手机回复耳机音量，回复时CMD填0x07，PARAM填写音量大小，范围是0~16。耳机本地音量变化时，也需要主动上报变化后的音量。 |
+| 0x08 | 获取耳机当前的EQ模式，后面没有PARAM数据，耳机收到该指令，要按照协议格式给手机回复耳机当前的EQ模式，回复时CMD填0x08，PARAM填写EQ模式，范围是0~2。耳机本地EQ模式变化时，也需要主动上报变化后的模式。 |
+| 0x09 | 获取耳机当前的EQ参数，后面没有PARAM数据，耳机收到该指令，要按照协议格式给手机回复耳机当前的EQ参数，回复时CMD填0x09，PARAM填写10个字节的EQ参数，每个字节表示一个EQ频点的增益，增益的范围是-12~12。 |
+| 0x0a | 通知耳机进入OTA升级模式，后接4个字节PARAM数据，表示升级文件的大小，耳机执行成功后需要给手机回复相同数据。 |
+| 0x0b | 表示这包是升级文件的数据，后接255字节的升级文件数据，耳机收到数据后，要按照协议格式给手机回复升级文件数据的接收状态，回复时CMD填0x0b，PARAM填写状态，范围0~2，0表示写入成功，1表示写入失败，2表示数据校验不通过。 |
+
 # SPP到RCSP完整流程分析
 
 ## 1. SPP连接建立流程
@@ -845,14 +872,14 @@ FE DC BA C0 C0 00 06 27 04 02 01 01 03 EF
 // 分析：
 FE DC BA     // 同步头 - 被底层SPP处理程序识别并剥离
 C0           // data[0] = 0xC0 - 这个值使 tws_online_spp_in_task() 进入特定处理分支
-C0           // data[1] = 0xC0 - 序列号
+C0           // data[1] = 0xC0 - 操作码 (JL_OPCODE_SET_ADV = 0xC0)
 00 06        // data[2-3] = 数据长度 (6字节)
 27 04 02 01 01 03  // data[4+] = 数据载荷，最终传给RCSP协议栈
 EF           // 校验码
 
 // RCSP协议实际接收的数据格式：
-C0           // 操作码 (JL_OPCODE_SET_ADV = 0xC0)
-C0           // 序列号
+C0           // data[0] = 0xC0 - 这个值使 tws_online_spp_in_task() 进入特定处理分支
+C0           // data[1] = 0xC0 - 操作码 (JL_OPCODE_SET_ADV = 0xC0)
 00 06        // 数据长度
 27 04 02 01 01 03  // 数据载荷，其中：
   27         // 内部处理标识
@@ -1616,209 +1643,94 @@ rcsp_cmd_recieve()
 
 **重要发现**：这个数据包实际是**音频状态查询**，而非音量控制。真正的音量调节通过**AVRCP协议**实现。
 
-**实际SPP数据包**:
+进入APP音量控制页面后并修改音量的日志：
 
 ```c
-[00:19:10.561]online_spp_rx(14)           // SPP接收查询指令
-FE DC BA C0 07 00 06 30 FF 00 00 10 10 EF // 音频状态查询数据包
+[00:19:31.166][LMP]lmp_rx_unsniff_req_redeal:0x419790
+[00:19:31.167]link_conn_exit_sniff
+[00:19:31.167][BDMGR]sort_1_edr
+edr 96 20 32 (48 1)
+ide 1000
+[00:19:31.168]overwirte rx_unsniff_over
+[00:19:31.169][BDMGR]sort_1_edr
+edr 100 (48 0)
+[00:19:31.171][EARPHONE] BT STATUS DEFAULT
+[00:19:31.171][SNIFF] BT_STATUS_SNIFF_STATE_UPDATE 0
+[00:19:31.172][SNIFF]check_sniff_enable
+[00:19:31.173]dual_conn_btstack_event_handler:32
+[00:19:31.174][EARPHONE] BT STATUS DEFAULT
+[00:19:31.174]ui_bt_stack_msg_handler:32
+[00:19:31.175][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:19:31.180]online_spp_rx(14) 
+[00:19:31.181]tws_online_spp_in_task
+[00:19:31.181]ONLINE_SPP_DATA0000
 
-// 数据包格式分析：
-FE DC BA     // 同步头（被剥离）
-C0           // 数据类型标识（进入ONLINE_SPP_DATA分支）
-07           // RCSP操作码（JL_OPCODE_SYS_INFO_GET = 0x07）
-00 06        // 数据长度6字节
-30 FF 00 00 10 10  // 查询参数数据
-EF           // 校验码
+FE DC BA C0 07 00 06 25 FF 00 00 10 10 EF 
+[00:19:31.183]online_spp_rx(14) 
+[00:19:31.183]tws_online_spp_in_task
+[00:19:31.184]ONLINE_SPP_DATA0000
 
-[00:19:10.565]rcsp_common_function_get, mask = 1010  // 查询通用功能状态
+FE DC BA C0 07 00 06 26 FF 00 00 08 00 EF 
+[00:19:31.186]rcsp_common_function_get, mask = 1010
+[00:19:31.187]rcsp_common_function_get, mask = 800
+T
+[00:19:34.695][EARPHONE] BT STATUS DEFAULT
+[00:19:34.696]BT_STATUS_AVRCP_VOL_CHANGE
+[00:19:34.696][CLOCK]---sys clk set : 192000000
+[00:19:34.697][CLOCK]---SYSPLL EN : 1
+[00:19:34.698][CLOCK]---D_PLL EN  : 0
+[00:19:34.698][CLOCK]---HSB CLK : 192000000
+[00:19:34.699][CLOCK]---LSB CLK : 24000000
+[00:19:34.699][CLOCK]---SFC CLK : 96000000
+[00:19:34.700][CLOCK]---HSB_PLL_DIV : 1 * 1
+[00:19:34.701][CLOCK]---LSB_PLL_DIV : 1 * 1
+[00:19:34.701][CLOCK]---SFC_DIV : 0
+[00:19:34.702][CLOCK]--SYS DVDD  adaptive:13 SFR:13 -> DVDD_VOL_123V  @ 1212mv
+[00:19:34.703][CLOCK]--SYS RVDD  adaptive:13 SFR:13 -> RVDD_VOL_123V  @ 1227mv
+[00:19:34.704][CLOCK]--SYS DCVDD fix_mode:5 SFR:5 -> DCVDD_VOL_125V @ 1248mv
+[00:19:34.705][CLOCK]---RANGE    : 6 / 0
+[00:19:34.705]dual_conn_btstack_event_handler:41
+[00:19:34.706][EARPHONE] BT STATUS DEFAULT
+[00:19:34.706]ui_bt_stack_msg_handler:41
+[00:19:34.805]set_music_device_volume=81
 
-// 几秒后，真正的音量调节触发AVRCP协议
-[00:19:16.212]BT_STATUS_AVRCP_VOL_CHANGE  // ✅AVRCP音量变化事件
-[00:19:16.240]set_music_device_volume=120  // 设置音量为120
-[00:19:16.242]phone_vol:120,dac_vol=15     // 手机音量120映射为DAC音量15
+[00:19:34.806]phone_vol:81,dac_vol:10
+[00:19:34.807]set_vol[idle]:music=10
+[00:19:36.172][SNIFF]-----USER SEND SNIFF IN 0 1
+[00:19:36.173][AVCTP]role 0 
+[00:19:36.173][LMP]HCI_SNIFF_MODE=800,100,4,1
+[00:19:36.174][BDMGR]add_timing2: edr 1 768 10, 0
+[00:19:36.178][BDMGR]add_timing2: edr 1 768 10, 32
+[00:19:36.179][EARPHONE] BT STATUS DEFAULT
+[00:19:36.180][SNIFF] BT_STATUS_SNIFF_STATE_UPDATE 2
+[00:19:36.181][SNIFF]check_sniff_disable
+[00:19:36.181][LINK]link_sniff_init_lp_ws 0
+[00:19:36.182][BDMGR]sort_1_edr
+[00:19:36.182]	
+edr 768 10 32 (48 1)
+ide 1000
+[00:19:36.183]dual_conn_btstack_event_handler:32
+[00:19:36.183][EARPHONE] BT STATUS DEFAULT
+[00:19:36.184]ui_bt_stack_msg_handler:32
+[00:19:36.184][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATES<>wS<>wS<>wS<>w**S<>wS<>wS<>wS<>wS<>w**S<>wS<>wS<>wS<>wS<>w*
+[00:19:38.705][clock-manager]cpu0: 1% cpu1: 0% jlstream: 0% curr_clk:192000000  min_clk:60000000 dest_clk:60000000, 1
+[00:19:38.706][CLOCK]---sys clk set : 60000000
+[00:19:38.717][CLOCK]---SYSPLL EN : 1
+[00:19:38.718][CLOCK]---D_PLL EN  : 0
+[00:19:38.718][CLOCK]---HSB CLK : 64000000
+[00:19:38.719][CLOCK]---LSB CLK : 24000000
+[00:19:38.719][CLOCK]---SFC CLK : 64000000
+[00:19:38.710][CLOCK]---HSB_PLL_DIV : 1 * 2
+[00:19:38.710][CLOCK]---LSB_PLL_DIV : 1 * 1
+[00:19:38.711][CLOCK]---SFC_DIV : 3 * 1
+[00:19:38.712][CLOCK]--SYS DVDD  adaptive:4 SFR:4 -> DVDD_VOL_096V  @ 957mv
+[00:19:38.713][CLOCK]--SYS RVDD  adaptive:6 SFR:6 -> RVDD_VOL_102V  @ 1015mv
+[00:19:38.714][CLOCK]--SYS DCVDD fix_mode:5 SFR:5 -> DCVDD_VOL_125V @ 1245mv
+[00:19:38.715][CLOCK]---RANGE    : 1 / 0S<>wS<>w**S<>wS<>wS<>w**S<>w
+[00:19:39.808][APP_AUDIO]VOL_SAVE 10
 ```
 
-### 音频状态查询指令解析详细流程
 
-**数据载荷解析**：`30 FF 00 00 10 10`
-
-```c
-// 文件：rcsp_cmd_recieve.c:get_sys_info()
-static void get_sys_info(void *priv, u8 OpCode, u8 OpCode_SN, u8 *data, u16 len, u16 ble_con_handle, u8 *spp_remote_addr)
-{
-    // 数据解析：data = [30, FF, 00, 00, 10, 10]
-    u8 function = data[0];  // 0x30 = 48 (未知功能类型，可能是内部标识)
-    
-    // 调用设备状态查询函数，传递剩余数据
-    u32 rlen = rcsp_device_status_get(priv, function, data + 1, len - 1, resp + 1, TARGET_FEATURE_RESP_BUF_SIZE - 1);
-}
-
-// 文件：rcsp_device_status.c:rcsp_device_status_get()
-u32 rcsp_device_status_get(void *priv, u8 function, u8 *data, u16 len, u8 *buf, u16 buf_size)
-{
-    // data = [FF, 00, 00, 10, 10] (5字节，但只读取前4字节作为mask)
-    u32 mask = READ_BIG_U32(data);  // 读取：FF 00 00 10 = 0xFF000010
-    // 但日志显示mask=0x1010，可能数据重新排列后为：00 00 10 10
-    
-    if (function == COMMON_FUNCTION) {  // 假设经过处理后function变为COMMON_FUNCTION 0xFF
-        return rcsp_common_function_get(priv, buf, buf_size, mask);
-    }
-}
-
-// 文件：rcsp_device_status.c:rcsp_common_function_get()
-static u32 rcsp_common_function_get(void *priv, u8 *buf, u16 buf_size, u32 mask)
-{
-    printf("rcsp_common_function_get, mask = %x\n", mask);  // 对应日志：mask = 1010
-    
-    // 通过属性获取映射表处理查询请求
-    return attr_get(priv, buf, buf_size, target_common_function_get_tab, RCSP_DEVICE_STATUS_ATTR_TYPE_MAX, mask);
-}
-```
-
-### 查询掩码解析
-
-**查询掩码**：`mask = 0x1010`
-
-```c
-// 掩码解析：
-// 0x1010 = BIT(4) | BIT(12)
-// BIT(4)  = RCSP_DEVICE_STATUS_ATTR_TYPE_EQ_INFO (4)           - EQ信息
-// BIT(12) = RCSP_DEVICE_STATUS_ATTR_TYPE_PRE_FETCH_ALL_EQ_INFO (12) - 预获取所有EQ信息
-
-// attr_get() 函数会根据mask查询对应的属性：
-// 1. 查询当前EQ设置信息
-// 2. 查询所有可用的EQ预设信息  
-```
-
-### 完整的音量调节触发链路分析
-
-**关键发现**：根据日志时间戳分析，这是一个**两阶段的音量调节过程**：
-
-```c
-// 第一阶段：RCSP状态查询（手机APP查询当前音频状态）
-[00:19:10.561]online_spp_rx(14)           // 手机发送RCSP查询指令
-[00:19:10.565]rcsp_common_function_get, mask = 1010  // 耳机响应查询（EQ状态等）
-
-// 第二阶段：AVRCP音量控制（手机收到状态后发送音量调节）
-[00:19:16.212]BT_STATUS_AVRCP_VOL_CHANGE  // ⏰ 约6秒后，手机通过AVRCP发送音量指令
-[00:19:16.240]set_music_device_volume=120 // 耳机设置DAC音量
-[00:19:16.242]phone_vol:120,dac_vol:15    // 音量映射关系
-
-// 🔍 触发机制分析：
-// 1. 手机APP通过RCSP查询当前音频状态（EQ、音量等）
-// 2. 耳机返回当前状态信息给手机
-// 3. 手机APP根据查询结果，通过标准AVRCP协议调节音量
-// 4. 耳机接收AVRCP音量指令并执行硬件控制
-```
-
-### 双协议协作机制
-
-```c
-// 📋 协议分工：
-// RCSP协议：查询设备状态、配置参数（高级功能）
-// AVRCP协议：音量控制、播放控制（标准蓝牙功能）
-
-// 💡 设计优势：
-// 1. RCSP专注设备特有功能，不重复造轮子
-// 2. AVRCP确保与标准蓝牙生态兼容
-// 3. 两协议协作实现复杂的用户交互逻辑
-```
-
-### 执行流程总结
-
-1. **数据包到达**: `30 FF 00 00 10 10` 
-2. **功能识别**: 经过处理后识别为音频状态查询
-3. **掩码解析**: `0x1010` = EQ信息查询
-4. **属性获取**: 通过`attr_get()`获取EQ相关信息
-5. **响应构建**: 将查询结果封装后发送给APP
-6. **音量控制**: 独立通过AVRCP协议实现
-
-### 调用链总结
-
-```c
-rcsp_cmd_recieve()
-├─ case JL_OPCODE_SYS_INFO_GET (0x07) 
-├─ get_sys_info()
-├─ rcsp_device_status_get()
-├─ rcsp_common_function_get() 
-├─ attr_get()
-└─ 返回EQ状态信息给APP
-
-// 并行的音量控制：
-AVRCP协议 → BT_STATUS_AVRCP_VOL_CHANGE → set_music_device_volume()
-```
-
-### 音量调节的完整触发链路（代码级分析）
-
-**根据代码分析，找到了`BT_STATUS_AVRCP_VOL_CHANGE`的完整触发路径**：
-
-```c
-// 🔍 完整触发链路：
-// 1. 手机通过AVRCP协议发送音量变化指令
-// 2. 蓝牙协议栈接收AVRCP音量指令，产生BT_STATUS_AVRCP_VOL_CHANGE事件
-// 3. 事件分发到A2DP播放处理模块
-
-// 文件：a2dp_play.c - 事件处理
-case BT_STATUS_AVRCP_VOL_CHANGE:
-    puts("BT_STATUS_AVRCP_VOL_CHANGE\n");  // 对应日志
-    // 保存音量数据并启动100ms定时器（防抖处理）
-    data[6] = bt->value;  // 音量值 = 120
-    memcpy(g_avrcp_vol_chance_data, data, 7);
-    g_avrcp_vol_chance_timer = sys_timeout_add(NULL, avrcp_vol_chance_timeout, 100);
-    break;
-
-// 100ms后定时器触发，执行实际音量设置
-static void avrcp_vol_chance_timeout(void *priv)
-{
-    g_avrcp_vol_chance_timer = 0;
-    // 通过TWS命令同步音量到对端耳机
-    tws_a2dp_play_send_cmd(CMD_SET_A2DP_VOL, g_avrcp_vol_chance_data, 7, 1);
-}
-
-// TWS命令处理，实际设置音量
-case CMD_SET_A2DP_VOL:
-    dev_vol = data[8];  // 提取音量值 = 120
-    set_music_device_volume(dev_vol);  // 对应日志：set_music_device_volume=120
-    break;
-
-// 文件：vol_sync.c - 最终音量设置
-void set_music_device_volume(int volume)
-{
-    r_printf("set_music_device_volume=%d\n", volume);  // 对应日志
-    // 音量映射：phone_vol=120 -> dac_vol=15
-    printf("phone_vol:%d,dac_vol:%d\n", phone_vol, dac_vol);  // 对应日志
-}
-```
-
-### 防抖机制设计
-
-```c
-// 💡 100ms定时器防抖设计：
-// 1. 接收到AVRCP音量事件时，不立即设置音量
-// 2. 启动100ms定时器，如果期间有新的音量事件则重置定时器
-// 3. 定时器到期后才执行实际的音量设置
-// 4. 这样可以避免快速调节音量时的频繁操作
-```
-
-### RCSP查询与AVRCP控制的关系
-
-```c
-// 🔗 两阶段流程的真相：
-// 阶段1：RCSP状态查询（00:19:10.561 - 00:19:10.565）
-//   - 手机APP查询设备当前状态（EQ、音量等）
-//   - 这是APP UI更新前的状态同步
-
-// 阶段2：AVRCP音量控制（00:19:16.212开始）  
-//   - 用户在APP上调节音量
-//   - 手机通过标准AVRCP协议发送音量指令
-//   - 耳机蓝牙协议栈产生BT_STATUS_AVRCP_VOL_CHANGE事件
-//   - 经过防抖处理后更新硬件音量
-
-// ⚠️ 重要：这两个流程是独立的！
-// RCSP查询不会触发音量变化，是两个不相关的操作
-```
-
-**关键发现**：RCSP查询和AVRCP音量控制是完全独立的两个过程，时间上的接近只是巧合。RCSP专注设备状态管理，AVRCP处理标准蓝牙音频控制。
 
 # 在APP设置触摸按键功能后的流程分析
 
