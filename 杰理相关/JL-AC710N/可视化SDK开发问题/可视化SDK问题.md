@@ -1211,6 +1211,10 @@ void lp_touch_key_state_event_deal(u32 ch_idx, u32 event)
 }
 ```
 
+### 按键音是否叠加(打断)
+
+默认叠加。
+
 ## 添加其他自定义提示音
 
 先导入音源文件。
