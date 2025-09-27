@@ -1392,6 +1392,66 @@ static const struct tone_files english_tone_files = {
 
 - `play_tone_file(get_tone_files()->_TONE_KEY_ACTION_DOUBLE_CLICK_NAME);`
 
+## 出仓需要开机提示音
+
+`apps\earphone\mode\power_on\power_on.c`
+
+```c
+static int poweron_mode_init()
+{
+    log_info("power on");
+#if _DAC_PA_EN
+    //手动开启功放，在这里打开不会丢掉开机提示音
+    extern void user_pa_deal(u8 enable);
+    user_pa_deal(1);
+#endif
+    if (app_var.play_poweron_tone) {
+#if _CHARGE_OUT_TONE_ENABLE
+        //跟那边换一下,一般这个提示音为空。
+        int ret = play_tone_file_callback(get_tone_files()->bt_mode, NULL, poweron_tone_play_end_callback);
+#else
+        int ret = play_tone_file_callback(get_tone_files()->power_on, NULL, poweron_tone_play_end_callback);
+#endif
+        if (ret != 0) {
+            log_error("power on tone play err!!!");
+            poweron_task_start();
+        }
+    } else {
+        poweron_task_start();
+    }
+    app_send_message(APP_MSG_ENTER_MODE, APP_MODE_POWERON);
+    return 0;
+}
+```
+
+`apps\earphone\mode\bt\earphone.c`
+
+- 任何开机方式都要经过的地方。
+
+```c
+int bt_mode_init()
+{
+    log_info("bt mode\n");
+
+#if (defined CONFIG_CPU_BR56) && (CONFIG_BT_MODE == BT_FCC || CONFIG_BT_MODE == BT_BQB || TCFG_NORMAL_SET_DUT_MODE == 1)
+    u32 curr_clk = clk_get_max_frequency();
+    y_printf("DUT test,set clock:%d\n", curr_clk);
+    clock_alloc("DUT", curr_clk);
+#endif
+
+#if (TCFG_BT_BACKGROUND_ENABLE)      //后台返回到蓝牙模式如果是通过模式切换返回的还是要播放提示音
+    if (g_bt_hdl.background.backmode == BACKGROUND_GOBACK_WITH_MODE_SWITCH && !bt_background_switch_mode_check())
+#endif  //endif TCFG_BLUETOOTH_BACK_MODE
+    {
+        tone_player_stop();
+#if _CHARGE_OUT_TONE_ENABLE
+        play_tone_file_callback(get_tone_files()->power_on, NULL, tone_bt_mode_callback);
+#endif
+    }
+```
+
+
+
 # 时钟频率
 
 **函数整体功能**：根据音频管道名称返回对应的UUID
@@ -2193,4 +2253,3 @@ APP_MSG_HANDLER(sniff_btstack_msg_stub) = {
 - 截至电流是恒流除以挡位。
 
 ![image-20250910110328647](./可视化SDK问题.assets/image-20250910110328647.png)
-
