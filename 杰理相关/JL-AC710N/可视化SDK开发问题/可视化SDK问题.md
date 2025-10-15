@@ -329,7 +329,80 @@ static void lp_touch_key_short_click_time_out_handle(void *priv)
 }
 ```
 
+## 同时按键消息使能单击失效问题
 
+![image-20251015115942276](./可视化SDK问题.assets/image-20251015115942276.png)
+
+开启后，单耳单击可以生效，但是TWS状态下，单击失效。
+
+```c
+#ifdef _MKJ_M86
+u8 local_press = 0;
+u8 sibling_press = 0;
+u8 key_alone_flag = 0;//同时按键超时标志
+void sys_clean_click(void *priv) {
+    local_press = 0;
+    sibling_press = 0;
+    key_alone_flag = 1;
+}
+#endif
+
+case KEY_ACTION_FIFTH_CLICK:
+#ifdef _MKJ_M86
+                if (tws_state & TWS_STA_SIBLING_CONNECTED) {
+                    if ((channel == 'L' && msg[1] != APP_KEY_MSG_FROM_TWS) ||
+                        (channel == 'R' && msg[1] == APP_KEY_MSG_FROM_TWS)) {
+                        sibling_press = 1;
+                    } else {
+                        local_press = 1;
+                    } 
+                }
+                if ((local_press == 1) && (sibling_press == 1)) {  
+#if _TONE_KEY_ACTION_TWS_FIFTH_CLICK_ENABLE
+        tws_play_tone_file(get_tone_files()->_TONE_KEY_ACTION_TWS_FIFTH_CLICK_NAME,300);
+#elif _TONE_KEY_ACTION_TWS_FIFTH_CLICK_ALONE_ENABLE
+        tws_play_tone_file_alone(get_tone_files()->_TONE_KEY_ACTION_TWS_FIFTH_CLICK_NAME,300);
+#endif
+                    //按键消息都是在主机中处理，可以接收到从机的按键消息
+                    app_msg = _TWS_STA_PHONE_CONNECTED_SIBLING_CONNECTED_KEY_ACTION_FIFTH_CLICK_L;
+                    //完成同时五击按键消息后清除状态
+                    local_press = 0;
+                    sibling_press = 0;
+                    break;
+                }
+                //放外面相当于全局变量了,单边五击，设置一个超时清除
+                sys_timeout_add(NULL,sys_clean_click,1000);
+                //超时后执行单边功能
+                if(key_alone_flag == 1){
+                    app_msg = APP_MSG_NULL;
+                    //执行完清除状态
+                    key_alone_flag = 0;
+                }
+#else
+                if (tws_state & TWS_STA_SIBLING_CONNECTED) {
+                    if ((channel == 'L' && msg[1] != APP_KEY_MSG_FROM_TWS) ||
+                        (channel == 'R' && msg[1] == APP_KEY_MSG_FROM_TWS)) {
+                        app_msg = _TWS_STA_PHONE_CONNECTED_SIBLING_CONNECTED_KEY_ACTION_FIFTH_CLICK_L;
+                        break;
+                    }else {
+                        app_msg = _TWS_STA_PHONE_CONNECTED_SIBLING_CONNECTED_KEY_ACTION_FIFTH_CLICK_R; 
+                        break;
+                    }
+                }else if(tws_state & TWS_STA_SIBLING_DISCONNECTED) {
+                    if ((channel == 'L' && msg[1] != APP_KEY_MSG_FROM_TWS) ||
+                        (channel == 'R' && msg[1] == APP_KEY_MSG_FROM_TWS)) {
+                        app_msg = _TWS_STA_PHONE_CONNECTED_SIBLING_DISCONNECTED_KEY_ACTION_FIFTH_CLICK_L;
+                        break;
+                    }else {
+                        app_msg = _TWS_STA_PHONE_CONNECTED_SIBLING_DISCONNECTED_KEY_ACTION_FIFTH_CLICK_R;
+                        break;
+                    }
+                } 
+#endif
+                break;
+```
+
+- 先暂时手动实现，把宏关了。
 
 # 恢复出厂设置
 
@@ -2303,11 +2376,39 @@ ANC打开后效果像通透。原因：
 
 - 也可能出现能切但是没有效果而且ANC调试不了。
 
+## 问题
+
+- 有提示音但是没有效果。
+
+![image-20251009195123247](./可视化SDK问题.assets/image-20251009195123247.png)
+
+![image-20251009195137836](./可视化SDK问题.assets/image-20251009195137836.png)
+
+![image-20251009195211455](./可视化SDK问题.assets/image-20251009195211455.png)
+
+![image-20251009195228349](./可视化SDK问题.assets/image-20251009195228349.png)
+
+## 有效果，有提示音，能调试ANC
+
+![image-20251009213246427](./可视化SDK问题.assets/image-20251009213246427.png)
+
+![image-20251009213257047](./可视化SDK问题.assets/image-20251009213257047.png)
+
+![image-20251009213306379](./可视化SDK问题.assets/image-20251009213306379.png)
+
+![image-20251009213317407](./可视化SDK问题.assets/image-20251009213317407.png)
+
+![image-20251009213326048](./可视化SDK问题.assets/image-20251009213326048.png)
+
+![image-20251009213441050](./可视化SDK问题.assets/image-20251009213441050.png)
+
 # Dongle
 
 ## 耳机SDK
 
 ![企业微信截图_17599104692939](./可视化SDK问题.assets/企业微信截图_17599104692939.png)
+
+功能打不开似乎，默认打开，插在电脑上可以直接连接。
 
 ## 对应SDK
 
@@ -2317,3 +2418,13 @@ ANC打开后效果像通透。原因：
 
 ![企业微信截图_17599134968985](./可视化SDK问题.assets/企业微信截图_17599134968985.png)
 
+公版按照文档操作，可以使用电脑利用2.4G连接到耳机。但是连接速度和断开速度太慢。
+
+## 电脑连接耳机时，dongle端日志
+
+
+
+# 关于触摸元器件
+
+- 机器有突出部分的，加上外壳，需要导电布或铜箔才能有触摸。
+- 饼状平的，则不需要这一些。
