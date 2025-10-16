@@ -1096,6 +1096,146 @@ void bt_bredr_enter_dut_mode(u8 mode, u8 inquiry_scan_en)
 }
 ```
 
+## **同时进DUT，会重新自动配对，测试盒进入，串口断开后会跑5VOFF**
+
+- 灯效会被刷新
+
+`apps\earphone\mode\bt\earphone.c`
+
+```c
+/**********进入蓝牙dut模式
+*  mode=0:使能可以进入dut，原本流程不变。
+*  mode=1:删除一些其它切换状态，产线中通过工具调用此接口进入dut模式，提高测试效率
+ *********************/
+u8 dut_flag = 0;
+void bt_bredr_enter_dut_mode(u8 mode, u8 inquiry_scan_en)
+{
+    puts("<<<<<<<<<<<<<bt_bredr_enter_dut_mode>>>>>>>>>>>>>>\n");
+
+    dut_flag = 1;//测试盒进入，串口断开会跑5Voff，标志位限制
+
+#if (defined CONFIG_CPU_BR56)
+    u32 curr_clk = clk_get_max_frequency();
+    y_printf("DUT test,set clock:%d\n", curr_clk);
+    clock_alloc("DUT", curr_clk);
+#endif
+    bredr_set_dut_enble(1, 1);
+    if (mode) {
+        //led_ui_set_state(_LED_BT_OPEN_DUT_NAME, _LED_BT_OPEN_DUT_DISP_MODE);//设置DUT模式的灯效
+        //后面TWS断开会更新灯效。
+        clr_device_in_page_list();
+        dut_idle_run_slot(2);
+        g_bt_hdl.auto_connection_counter = 0;
+#if TCFG_USER_TWS_ENABLE
+        bt_page_scan_for_test(inquiry_scan_en);
+#endif
+
+    }
+}
+
+
+case APP_MSG_BT_OPEN_DUT:
+        puts("APP_MSG_BT_OPEN_DUT\n");
+        //bt_bredr_enter_dut_mode(1, 1);
+        if(bt_get_total_connect_dev() == 0){
+            //无连接才能进入
+            //主从同时进入
+            tws_api_sync_call_by_uuid('T', SYNC_CMD_ENTER_DUT_TOGETHER, 400);
+        }
+        break;
+```
+
+`apps\earphone\mode\bt\bt_tws.c`
+
+```c
+void bt_page_scan_for_test(u8 inquiry_en)
+{
+    u8 local_addr[6];
+
+    log_info("\n\n\n\n -------------bt test page scan\n");
+
+    tws_api_cancle_wait_pair();
+    tws_api_cancle_create_connection();
+
+    //主耳主动清除配对
+    if(tws_api_get_role() == TWS_ROLE_MASTER){
+        //bt_tws_remove_pairs();两个接口的区别？？？
+        tws_api_remove_pairs();
+    }
+    //确保最终灯效。
+    led_ui_set_state(_LED_BT_OPEN_DUT_NAME, _LED_BT_OPEN_DUT_DISP_MODE);//设置DUT模式的灯效
+    bt_cmd_prepare(USER_CTRL_PAGE_CANCEL, 0, NULL);
+
+    tws_api_detach(TWS_DETACH_BY_POWEROFF, 5000);
+
+    bt_cmd_prepare(USER_CTRL_POWER_OFF, 0, NULL);
+
+    if (0 == bt_get_total_connect_dev()) {
+        bt_get_vm_mac_addr(local_addr);
+        lmp_hci_write_local_address(local_addr);
+        if (inquiry_en) {
+            bt_cmd_prepare(USER_CTRL_WRITE_SCAN_ENABLE, 0, NULL);
+        }
+        bt_cmd_prepare(USER_CTRL_WRITE_CONN_ENABLE, 0, NULL);
+    }
+
+    sys_auto_shut_down_disable();
+    sys_auto_shut_down_enable();
+
+    gtws.state = 0;
+}
+```
+
+## 测试盒进入问题
+
+`apps\earphone\battery\charge.c`
+
+- `app_charge_event_handler`
+
+```c
+    case CHARGE_EVENT_LDO5V_OFF:
+#if ((TCFG_OTG_MODE & OTG_SLAVE_MODE) && (TCFG_OTG_MODE & OTG_CHARGE_MODE))
+        otg_status = usb_otg_online(0);
+#endif
+        if (get_charge_poweron_en() || (otg_status != SLAVE_MODE)) {
+            charge_ldo5v_off_deal();
+            extern u8 dut_flag;
+            if(dut_flag == 1){
+                break;
+            }
+        }
+        break;
+```
+
+`apps\earphone\tools\app_testbox.c`
+
+```c
+static void app_testbox_sub_event_handle(u8 *data, u16 size)
+{
+    u8 mac = 0;
+    switch (data[0]) {
+    case CMD_BOX_FAST_CONN:
+    case CMD_BOX_ENTER_DUT:
+        __this->event_hdl_flag = 0;
+        if (!app_in_mode(APP_MODE_BT)) {
+            if (!app_var.goto_poweroff_flag) {
+                app_var.play_poweron_tone = 0;
+                app_send_message(APP_MSG_GOTO_MODE, APP_MODE_BT);
+            }
+        } else {
+            if ((!__this->connect_status) && __this->bt_init_ok) {
+                log_info("\n\nbt_page_inquiry_scan_for_test\n\n");
+                __this->connect_status = 1;
+                log_info("bredr_dut_enbale\n");
+                //bt_bredr_enter_dut_mode(1, 1);
+                tws_api_sync_call_by_uuid('T', SYNC_CMD_ENTER_DUT_TOGETHER, 400);
+            }
+        }
+        break;
+```
+
+
+
 # 提示音
 
 ## 提示音文件
@@ -2419,3 +2559,6 @@ ANC打开后效果像通透。原因：
 
 - 机器有突出部分的，加上外壳，需要导电布或铜箔才能有触摸。
 - 饼状平的，则不需要这一些。
+
+# 增加按仓按键恢复出厂设置（脉冲）
+
