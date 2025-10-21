@@ -184,7 +184,138 @@ void check_power_on_key(void)
 }
 ```
 
+## 充电同步关机
 
+`apps\earphone\battery\charge.c`
+
+- charge_ldo5v_in_deal
+
+```c
+u8 charge_ldo5v_in_flag = 0;//充电标志位
+void charge_ldo5v_in_deal(void)
+{
+    int abandon = 0;
+    const struct app_charge_handler *handler;
+
+    log_info("%s\n", __FUNCTION__);
+
+#if _TWS_POWER_OFF_CHARGE_5V_IN_ENABLE
+    //小概率失效
+    //tws_sync_poweroff(); 充电耳机也关机不能充电
+    charge_ldo5v_in_flag = 1;
+    tws_api_sync_call_by_uuid('T', SYNC_CMD_POWER_OFF_LDO5V_IN, 300);
+#endif
+
+    //插入交换
+    batmgr_send_msg(POWER_EVENT_POWER_CHANGE, 0);
+
+    charge_full_flag = 0;
+
+    charge_check_and_set_pinr(0);
+
+    for_each_app_charge_handler(handler) {
+        abandon += handler->handler(CHARGE_EVENT_LDO5V_IN, 0);
+    }
+
+#if defined(TCFG_CHARGE_KEEP_UPDATA) && TCFG_CHARGE_KEEP_UPDATA
+    //升级过程中,不执行充电插入关机流程
+    if (dual_bank_update_exist_flag_get() || classic_update_task_exist_flag_get()) {
+        return;
+    }
+#endif
+
+    if (get_charge_poweron_en() == 0) {
+        if (!app_in_mode(APP_MODE_IDLE)) {
+            if (abandon == 0) {
+                sys_enter_soft_poweroff(POWEROFF_RESET);
+            }
+        } else {
+            charge_start();
+            wdt_init(WDT_32S);
+            log_info("set wdt to 32s!\n");
+            goto _check_reset;
+        }
+    } else {
+        charge_start();
+        goto _check_reset;
+    }
+    return;
+
+_check_reset:
+    //防止耳机低电时,插拔充电有几率出现关机不充电问题
+    if (app_var.goto_poweroff_flag) {
+        cpu_reset();
+    }
+}
+```
+
+`apps\earphone\include\bt_tws.h`
+
+```c
+enum {
+    SYNC_CMD_SHUT_DOWN_TIME,
+    SYNC_CMD_POWER_OFF_TOGETHER,
+    SYNC_CMD_POWER_OFF_LDO5V_IN,//充电另一边关机
+    SYNC_CMD_EARPHONE_CHAREG_START,
+    SYNC_CMD_IRSENSOR_EVENT_NEAR,
+    SYNC_CMD_IRSENSOR_EVENT_FAR,
+#if(USE_DMA_TONE)
+    SYNC_CMD_CUT_TWS_TONE,     //断开对耳提示音
+    SYNC_CMD_START_SPEECH_TONE,//AI键提示音
+    SYNC_CMD_DMA_CONNECTED_ALL_FINISH_TONE,   //AI连接成功
+    SYNC_CMD_NEED_BT_TONE,     //需要连接蓝牙
+    SYNC_CMD_PLEASE_OPEN_XIAODU_TONE,//请打开小度
+#endif
+
+    SYNC_CMD_RESET, //新增公共枚举值，不区分项目
+    
+    SYNC_CMD_OPUS_CLOSE,
+};
+```
+
+`apps\earphone\mode\bt\bt_tws.c`
+
+```c
+/*
+ * 主从同步调用函数处理
+ */
+static void tws_sync_call_fun(int cmd, int err)
+{
+    log_d("TWS_EVENT_SYNC_FUN_CMD: %d\n", cmd);
+
+    switch (cmd) {
+    case SYNC_CMD_EARPHONE_CHAREG_START:
+        if (bt_a2dp_get_status() != BT_MUSIC_STATUS_STARTING) {
+            bt_cmd_prepare(USER_CTRL_AVCTP_OPID_PLAY, 0, NULL);
+        }
+        break;
+    case SYNC_CMD_IRSENSOR_EVENT_NEAR:
+        if (bt_a2dp_get_status() != BT_MUSIC_STATUS_STARTING) {
+            bt_cmd_prepare(USER_CTRL_AVCTP_OPID_PLAY, 0, NULL);
+        }
+        break;
+    case SYNC_CMD_IRSENSOR_EVENT_FAR:
+        if (bt_a2dp_get_status() == BT_MUSIC_STATUS_STARTING) {
+            bt_cmd_prepare(USER_CTRL_AVCTP_OPID_PAUSE, 0, NULL);
+        }
+        break;
+    case SYNC_CMD_RESET:
+		extern void factory_reset_deal_callback(void);
+        factory_reset_deal_callback();
+        break;
+    case SYNC_CMD_POWER_OFF_LDO5V_IN:
+        extern u8 charge_ldo5v_in_flag;
+        if(charge_ldo5v_in_flag == 1){
+            charge_ldo5v_in_flag = 0;
+            break;//充电这边不执行关机
+        }else {
+            sys_enter_soft_poweroff(POWEROFF_NORMAL); // 软关机复位
+            break;
+        }
+        break;
+    }
+}
+```
 
 # TWS相关
 
@@ -1159,7 +1290,7 @@ void bt_page_scan_for_test(u8 inquiry_en)
 
     //主耳主动清除配对
     if(tws_api_get_role() == TWS_ROLE_MASTER){
-        //bt_tws_remove_pairs();两个接口的区别？？？
+        //bt_tws_remove_pairs();两个接口的区别？？？后者内部还是调用这个
         tws_api_remove_pairs();
     }
     //确保最终灯效。
@@ -1233,8 +1364,6 @@ static void app_testbox_sub_event_handle(u8 *data, u16 size)
         }
         break;
 ```
-
-
 
 # 提示音
 
@@ -2561,4 +2690,37 @@ ANC打开后效果像通透。原因：
 - 饼状平的，则不需要这一些。
 
 # 增加按仓按键恢复出厂设置（脉冲）
+
+# IO保护
+
+`cpu\br56\power\power_port.c`
+
+```c
+#include "asm/power_interface.h"
+#include "iokey.h"
+#include "irkey.h"
+#include "adkey.h"
+#include "app_config.h"
+
+void gpio_config_soft_poweroff(void)
+{
+    PORT_TABLE(g);
+
+#if TCFG_IOKEY_ENABLE
+    PORT_PROTECT(get_iokey_power_io());
+#endif
+
+#if _TCFG_PWMLED_PORT_PROTECT_ENABLE
+    //充满电会进入关机状态，要想状态灯持续亮，对IO要做保护
+    PORT_PROTECT(_LED0_PORT_PROTECT);
+    PORT_PROTECT(_LED1_PORT_PROTECT);
+#endif
+
+#if TCFG_ADKEY_ENABLE
+    PORT_PROTECT(get_adkey_io());
+#endif
+
+    __port_init((u32)gpio_config);
+}
+```
 
