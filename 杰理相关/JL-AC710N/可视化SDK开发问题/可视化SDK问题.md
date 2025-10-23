@@ -1152,6 +1152,89 @@ static int app_power_event_handler(int *msg)
   - 在哪里初始化？
   - 初始化?
 
+## 充电状态相关灯效
+
+### 关机状态插入充电到充满
+
+```c
+[00:00:00.273][APP_CHARGE]charge_ldo5v_in_deal
+[00:00:00.274]TWS_EVENT_SYNC_FUN_CMD: 2 //另一边关机命令
+[00:00:00.274][CHARGE]charge_start
+[00:00:00.275][APP_CHARGE]set wdt to 32s!
+[00:00:00.275][APP_CHARGE]charge_start_deal
+[00:00:00.276][APP_CHARGE]batmgr_send_msg(BAT_MSG_CHARGE_START, 0); //发送消息
+[00:00:00.277][PWM_LED]led_name = 3, disp_mode = 0x2 //灯效流程获取到消息更新灯效
+[00:00:00.277][LED_UI]MSG_FROM_BATTERY----ui_battery_msg_handler----BAT_MSG_CHARGE_STARTS<> //开始充电灯效日志
+[00:00:00.375][CHARGE]constant_current_progi_volt_config, 233, cur_vbat: 4264 mV
+S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>*****************S<>*S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>
+[00:00:58.276][APP_CHARGE]charge_full_deal
+[00:00:58.277][CHARGE]charge_close
+[00:00:58.277][APP_CHARGE]charge_close_deal
+[00:00:58.278][APP_CHARGE]batmgr_send_msg(BAT_MSG_CHARGE_CLOSE, 0);//发送消息
+[00:00:58.279][LED_UI]MSG_FROM_BATTERY----ui_battery_msg_handler----BAT_MSG_CHARGE_CLOSE//结束充电灯效日志，最终是这里
+[00:00:58.280][LED_UI]MSG_FROM_BATTERY----ui_battery_msg_handler----BAT_MSG_CHARGE_ERR
+[00:00:58.281][PWM_LED]led_name = 17, disp_mode = 0x2 //灯效流程获取到消息更新灯效
+[00:00:58.282][LED_UI]MSG_FROM_BATTERY----ui_battery_msg_handler----BAT_MSG_CHARGE_LDO5V_OFF //结束充电灯效日志
+```
+
+- 开启灯口保护后可以使充满灯效常亮
+- 不开启灯口保护会使充满灯效亮一会后熄灭
+
+### 充电拔出
+
+```c
+[00:00:00.236][APP_CHARGE]charge_ldo5v_in_deal
+[00:00:00.237]TWS_EVENT_SYNC_FUN_CMD: 2
+[00:00:00.237][CHARGE]charge_start
+[00:00:00.238][APP_CHARGE]set wdt to 32s!
+[00:00:00.238][APP_CHARGE]charge_start_deal
+[00:00:00.239][APP_CHARGE]batmgr_send_msg(BAT_MSG_CHARGE_START, 0);
+[00:00:00.240][PWM_LED]led_name = 3, disp_mode = 0x2
+[00:00:00.240][LED_UI]MSG_FROM_BATTERY----ui_battery_msg_handler----BAT_MSG_CHARGE_STARTS<>
+[00:00:00.338][CHARGE]constant_current_progi_volt_config, 233, cur_vbat: 3804 mV
+[00:00:00.339][CHARGE]constant_current_progi_volt_config, 245, max_progi: 904 mV
+S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>**************************S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S
+[00:02:07.127][APP_CHARGE]charge_ldo5v_off_deal
+[00:02:07.127][CHARGE]charge_close
+[00:02:07.128][APP_CHARGE]batmgr_send_msg(BAT_MSG_CHARGE_LDO5V_OFF, 0);
+[00:02:07.129][APP_CHARGE]set wdt to 4s!
+[00:02:07.129][APP_CHARGE]ldo5v off,enter softpoweroff
+[00:02:07.130][PMU]=============power_set_soft_poweroff============
+[00:02:07.131][PMU]sf_keep_lpctmu: 0
+[00:02:07.131][PMU]sf_keep_pvdd: 0
+[00:02:07.132][PMU]sf_keep_nvdd: 0
+[00:02:07.132][PMU]sf_vddio_keep: 1
+[00:02:07.132][PMU]keep_lrc: 0
+[00:02:07.133][PMU]sfc_bit_mode: 2, port: 0
+```
+
+- 开启灯口保护后，拔出，充电中的红灯不会熄灭
+
+```c
+void charge_ldo5v_off_deal(void)
+{
+    int abandon = 0;
+    int off_type = LDO5V_OFF_TYPE_NORMAL_ON;
+    bool lowpower_flag = FALSE, is_bt_mode, is_idle_mode;
+    const struct app_charge_handler *handler;
+
+    log_info("%s\n", __FUNCTION__);
+
+    //拨出交换
+    batmgr_send_msg(POWER_EVENT_POWER_CHANGE, 0);
+
+    charge_full_flag = 0;
+
+    charge_close();
+
+    batmgr_send_msg(BAT_MSG_CHARGE_LDO5V_OFF, 0);
+    log_info("batmgr_send_msg(BAT_MSG_CHARGE_LDO5V_OFF, 0);\n");
+#if _TCFG_PWMLED_PORT_PROTECT_ENABLE
+    //灯口保护中，发了消息但是灯效没有变化，这里手动更新一次
+    led_ui_set_state(LED_STA_ALL_OFF, DISP_CLEAR_OTHERS);
+#endif
+```
+
 # DUT
 
 `bt_key_power_msg_remap`创建按键事件触发后的DUT函数
@@ -2033,6 +2116,14 @@ if (bt_get_total_connect_dev() == 0) {    //已经没有设备连接
 
 **TWS状态下似乎可以生效，但是单耳状态无法通过判断。**
 
+## 获取音乐的播放状态
+
+```c
+bt_a2dp_get_status() == BT_MUSIC_STATUS_STARTING
+```
+
+
+
 # 其他
 
 ## 开在线调音
@@ -2724,3 +2815,49 @@ void gpio_config_soft_poweroff(void)
 }
 ```
 
+- 注意关机时出现的灯效滞留问题。
+- 可以使用另一种模式实现对应的灯效效果。
+
+# 修改蓝牙版本
+
+`apps\earphone\mode\bt\earphone.c`
+
+- `bt_connction_status_event_handler`
+
+```c
+case BT_STATUS_INIT_OK:
+#if _SET_BT_VERSION_ENABLE
+        //修改蓝牙版本
+        extern void set_bt_version(u8 version);
+        set_bt_version(_BT_VERSION);
+#endif
+```
+
+`interface\btctrler\btcontroller_modules.h`
+
+```c
+/* app 层修改蓝牙版本，可在BT_STATUS_INIT_OK case
+  调用 set_bt_version 函数更改蓝牙版本号
+*/
+#define BLUETOOTH_CORE_SPEC_42  0x08
+#define BLUETOOTH_CORE_SPEC_50  0x09
+#define BLUETOOTH_CORE_SPEC_51  0x0a
+#define BLUETOOTH_CORE_SPEC_52  0x0b
+#define BLUETOOTH_CORE_SPEC_54  0x0d
+#define BLUETOOTH_CORE_SPEC_60  0x0e
+extern void set_bt_version(u8 version);
+```
+
+# 麦无声音
+
+- IC:7106A8
+
+- 常规配置但是还是麦无声
+
+供电方式修改一下
+
+![image-20251023170430694](./可视化SDK问题.assets/image-20251023170430694.png)
+
+![image-20251023170707978](./可视化SDK问题.assets/image-20251023170707978.png)
+
+![image-20251023170629727](./可视化SDK问题.assets/image-20251023170629727.png)
