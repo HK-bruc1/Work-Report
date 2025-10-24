@@ -628,7 +628,7 @@ led_ui_set_state(LED_STA_BLUE_SLOW_FLASH, DISP_RECOVERABLE);
 
 ## 单耳
 
-```
+```c
 开机未连接
 [00:00:02.169][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
 [00:00:02.170][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
@@ -682,9 +682,98 @@ led_ui_set_state(LED_STA_BLUE_SLOW_FLASH, DISP_RECOVERABLE);
 [00:14:14.021][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_A2DP_MEDIA_STOP
 ```
 
-## 双耳
+### 有连接记录，开机不连接
+
+```c
+[00:00:02.263][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
 
 ```
+
+### 有连接记录，开机连接
+
+```c
+
+```
+
+### 有连接记录，开机连接后不放歌
+
+```c
+[00:00:02.263][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
+[00:00:02.607][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:02.617][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
+[00:00:02.619][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:03.303][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
+[00:00:05.599][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
+[00:00:08.666][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_CONNECTED
+[00:00:08.669][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SECOND_CONNECTED  
+[00:00:14.639][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:00:17.478][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:00:22.516][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE    
+```
+
+### 有连接记录，开机连接后放歌后暂停
+
+```c
+[00:00:02.263][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
+[00:00:02.607][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:02.617][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
+[00:00:02.619][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:03.303][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
+[00:00:05.599][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
+[00:00:08.666][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_CONNECTED
+[00:00:08.669][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SECOND_CONNECTED  
+[00:00:14.639][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:00:17.478][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:00:22.516][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE  
+[00:06:38.356][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_HANGUP----BT_STATUS_A2DP_MEDIA_START----BT_STATUS_PHONE_ACTIVE
+[00:07:08.259][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_A2DP_MEDIA_STOP
+[00:07:12.082][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:08:25.233][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE    
+```
+
+### 有连接记录，开机连接后，超距断开
+
+```c
+
+```
+
+### TWS配对后连接手机
+
+```c
+[00:00:02.263][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
+[00:00:02.607][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:02.619][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
+[00:00:02.621][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE 
+[00:00:03.298][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_PAIRED
+[00:00:03.299][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
+[00:00:03.466][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTED
+[00:00:03.468][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE----app_msg_power_on_flag    
+```
+
+### TWS配对后连接手机开启游戏模式后退出游戏模式
+
+```c
+[00:00:02.263][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
+[00:00:02.607][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:02.619][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
+[00:00:02.621][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE 
+[00:00:03.298][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_PAIRED
+[00:00:03.299][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
+[00:00:03.466][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTED
+[00:00:03.468][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE----app_msg_power_on_flag  
+    
+[00:05:13.002][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:05:20.972][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_LOW_LANTECY
+
+[00:07:37.751][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:08:29.518][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_LOW_LANTECY    
+```
+
+
+
+## 双耳
+
+```c
 开机(有配对记录之后)
 [00:00:01.269][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
 [00:00:01.270][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
@@ -758,3 +847,86 @@ TWS断开
   - `[00:15:49.388][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTED--------`
 - TWS断开
   - `[00:23:47.398][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTION_DETACH--------`
+
+## 充电状态相关灯效
+
+### 关机状态插入充电到充满
+
+```c
+[00:00:00.273][APP_CHARGE]charge_ldo5v_in_deal
+[00:00:00.274]TWS_EVENT_SYNC_FUN_CMD: 2 //另一边关机命令
+[00:00:00.274][CHARGE]charge_start
+[00:00:00.275][APP_CHARGE]set wdt to 32s!
+[00:00:00.275][APP_CHARGE]charge_start_deal
+[00:00:00.276][APP_CHARGE]batmgr_send_msg(BAT_MSG_CHARGE_START, 0); //发送消息
+[00:00:00.277][PWM_LED]led_name = 3, disp_mode = 0x2 //灯效流程获取到消息更新灯效
+[00:00:00.277][LED_UI]MSG_FROM_BATTERY----ui_battery_msg_handler----BAT_MSG_CHARGE_STARTS<> //开始充电灯效日志
+[00:00:00.375][CHARGE]constant_current_progi_volt_config, 233, cur_vbat: 4264 mV
+S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>*****************S<>*S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>
+[00:00:58.276][APP_CHARGE]charge_full_deal
+[00:00:58.277][CHARGE]charge_close
+[00:00:58.277][APP_CHARGE]charge_close_deal
+[00:00:58.278][APP_CHARGE]batmgr_send_msg(BAT_MSG_CHARGE_CLOSE, 0);//发送消息
+[00:00:58.279][LED_UI]MSG_FROM_BATTERY----ui_battery_msg_handler----BAT_MSG_CHARGE_CLOSE//结束充电灯效日志，最终是这里
+[00:00:58.280][LED_UI]MSG_FROM_BATTERY----ui_battery_msg_handler----BAT_MSG_CHARGE_ERR
+[00:00:58.281][PWM_LED]led_name = 17, disp_mode = 0x2 //灯效流程获取到消息更新灯效
+[00:00:58.282][LED_UI]MSG_FROM_BATTERY----ui_battery_msg_handler----BAT_MSG_CHARGE_LDO5V_OFF //结束充电灯效日志
+```
+
+- 开启灯口保护后可以使充满灯效常亮
+- 不开启灯口保护会使充满灯效亮一会后熄灭
+
+### 充电拔出
+
+```c
+[00:00:00.236][APP_CHARGE]charge_ldo5v_in_deal
+[00:00:00.237]TWS_EVENT_SYNC_FUN_CMD: 2
+[00:00:00.237][CHARGE]charge_start
+[00:00:00.238][APP_CHARGE]set wdt to 32s!
+[00:00:00.238][APP_CHARGE]charge_start_deal
+[00:00:00.239][APP_CHARGE]batmgr_send_msg(BAT_MSG_CHARGE_START, 0);
+[00:00:00.240][PWM_LED]led_name = 3, disp_mode = 0x2
+[00:00:00.240][LED_UI]MSG_FROM_BATTERY----ui_battery_msg_handler----BAT_MSG_CHARGE_STARTS<>
+[00:00:00.338][CHARGE]constant_current_progi_volt_config, 233, cur_vbat: 3804 mV
+[00:00:00.339][CHARGE]constant_current_progi_volt_config, 245, max_progi: 904 mV
+S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>**************************S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S
+[00:02:07.127][APP_CHARGE]charge_ldo5v_off_deal
+[00:02:07.127][CHARGE]charge_close
+[00:02:07.128][APP_CHARGE]batmgr_send_msg(BAT_MSG_CHARGE_LDO5V_OFF, 0);
+[00:02:07.129][APP_CHARGE]set wdt to 4s!
+[00:02:07.129][APP_CHARGE]ldo5v off,enter softpoweroff
+[00:02:07.130][PMU]=============power_set_soft_poweroff============
+[00:02:07.131][PMU]sf_keep_lpctmu: 0
+[00:02:07.131][PMU]sf_keep_pvdd: 0
+[00:02:07.132][PMU]sf_keep_nvdd: 0
+[00:02:07.132][PMU]sf_vddio_keep: 1
+[00:02:07.132][PMU]keep_lrc: 0
+[00:02:07.133][PMU]sfc_bit_mode: 2, port: 0
+```
+
+- 开启灯口保护后，拔出，充电中的红灯不会熄灭
+
+```c
+void charge_ldo5v_off_deal(void)
+{
+    int abandon = 0;
+    int off_type = LDO5V_OFF_TYPE_NORMAL_ON;
+    bool lowpower_flag = FALSE, is_bt_mode, is_idle_mode;
+    const struct app_charge_handler *handler;
+
+    log_info("%s\n", __FUNCTION__);
+
+    //拨出交换
+    batmgr_send_msg(POWER_EVENT_POWER_CHANGE, 0);
+
+    charge_full_flag = 0;
+
+    charge_close();
+
+    batmgr_send_msg(BAT_MSG_CHARGE_LDO5V_OFF, 0);
+    log_info("batmgr_send_msg(BAT_MSG_CHARGE_LDO5V_OFF, 0);\n");
+#if _TCFG_PWMLED_PORT_PROTECT_ENABLE
+    //灯口保护中，发了消息但是灯效没有变化，这里手动更新一次
+    led_ui_set_state(LED_STA_ALL_OFF, DISP_CLEAR_OTHERS);
+#endif
+```
