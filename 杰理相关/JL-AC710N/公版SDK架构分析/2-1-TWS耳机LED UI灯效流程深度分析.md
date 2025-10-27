@@ -626,231 +626,294 @@ led_ui_set_state(LED_STA_BLUE_SLOW_FLASH, DISP_RECOVERABLE);
 
 # 灯效流程
 
-## 单耳
-
-```c
-开机未连接
-[00:00:02.169][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
-[00:00:02.170][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
-[00:00:04.235][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
-[00:00:04.236][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
-[00:00:04.240][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
-[00:00:10.251][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
-[00:00:23.962][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
-[00:00:36.692][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
-[00:00:48.558][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
-
-连接手机蓝牙后
-[00:04:51.325][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_CONNECTED
-[00:04:57.334][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
-[00:04:59.887][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
-
-手动断开-1
-[00:07:00.212][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
-[00:07:00.467][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT
-[00:07:00.698][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
-
-超距离断开-2
-[00:01:26.835][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
-[00:12:10.076][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT
-[00:01:27.064][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE
-[00:01:41.092][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE
-[00:01:55.117][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE
-
-连接后放歌
-[00:06:18.690][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
-[00:06:22.731][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_HANGUP----BT_STATUS_A2DP_MEDIA_START----BT_STATUS_PHONE_ACTIVE
-
-停止放歌
-[00:06:28.999][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_A2DP_MEDIA_STOP
-[00:06:33.821][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
-
-来电
-[00:08:33.328][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
-[00:08:33.349][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_INCOME-------------------------------------------------------
-
-[00:08:33.427][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SCO_CONNECTION_REQ----------BT_CALL_INCOMING---------
-
-拒接/挂断
-[00:08:40.326][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_HANGUP----BT_STATUS_A2DP_MEDIA_START----BT_STATUS_PHONE_ACTIVE
-
-通话中
-[00:11:05.634][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_HANGUP----BT_STATUS_A2DP_MEDIA_START----BT_STATUS_PHONE_ACTIVE
-
-亮屏幕/熄屏幕会返回播歌状态
-开屏幕都会默认返回播歌状态，如果确实没播放，就会
-[00:14:14.021][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_A2DP_MEDIA_STOP
-```
-
-### 有连接记录，开机不连接
-
-```c
-[00:00:02.263][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
-
-```
-
-### 有连接记录，开机连接
-
-```c
-
-```
-
-### 有连接记录，开机连接后不放歌
-
-```c
-[00:00:02.263][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
-[00:00:02.607][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
-[00:00:02.617][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
-[00:00:02.619][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
-[00:00:03.303][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
-[00:00:05.599][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
-[00:00:08.666][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_CONNECTED
-[00:00:08.669][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SECOND_CONNECTED  
-[00:00:14.639][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
-[00:00:17.478][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
-[00:00:22.516][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE    
-```
-
-### 有连接记录，开机连接后放歌后暂停
-
-```c
-[00:00:02.263][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
-[00:00:02.607][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
-[00:00:02.617][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
-[00:00:02.619][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
-[00:00:03.303][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
-[00:00:05.599][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
-[00:00:08.666][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_CONNECTED
-[00:00:08.669][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SECOND_CONNECTED  
-[00:00:14.639][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
-[00:00:17.478][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
-[00:00:22.516][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE  
-[00:06:38.356][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_HANGUP----BT_STATUS_A2DP_MEDIA_START----BT_STATUS_PHONE_ACTIVE
-[00:07:08.259][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_A2DP_MEDIA_STOP
-[00:07:12.082][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
-[00:08:25.233][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE    
-```
-
-### 有连接记录，开机连接后，超距断开
-
-```c
-
-```
-
-### TWS配对后连接手机
+## 有蓝牙和TWS连接记录，开机不连接直到自动关机
 
 ```c
 [00:00:02.263][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
 [00:00:02.607][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
 [00:00:02.619][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
-[00:00:02.621][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE 
-[00:00:03.298][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_PAIRED
-[00:00:03.299][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
-[00:00:03.466][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTED
-[00:00:03.468][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE----app_msg_power_on_flag    
+[00:00:02.621][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:03.305][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_PAIRED 
+[00:00:03.306][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
+[00:00:09.315][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE----app_msg_power_on_flag
+[00:00:17.324][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE----app_msg_power_on_flag
+[00:00:31.349][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE----app_msg_power_on_flag
+[00:00:45.373][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE----app_msg_power_on_flag
+[00:00:59.398][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE----app_msg_power_on_flag
+[00:01:13.423][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
+[00:03:02.637][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_OFF
+[00:03:05.503][LED_UI]MSG_FROM_PWM_LED----ui_pwm_led_msg_handler----LED_MSG_STATE_END
+[00:03:05.504][LED_UI]LED_STATE_END: name = 9    
 ```
 
-### TWS配对后连接手机开启游戏模式后退出游戏模式
+- `APP_MSG_BT_IN_PAGE_MODE`有一点像回连手机或者TWS。
+
+## 有蓝牙连接记录，开机连接TWS不连接手机直到自动关机
 
 ```c
 [00:00:02.263][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
 [00:00:02.607][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
 [00:00:02.619][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
-[00:00:02.621][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE 
-[00:00:03.298][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_PAIRED
-[00:00:03.299][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
-[00:00:03.466][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTED
-[00:00:03.468][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE----app_msg_power_on_flag  
+[00:00:02.621][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:03.305][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_PAIRED 
+[00:00:03.306][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
+[00:00:07.478][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTED
+[00:00:07.481][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE----app_msg_power_on_flag
+[00:00:09.315][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE----app_msg_power_on_flag
+[00:00:17.324][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE----app_msg_power_on_flag
+[00:00:31.349][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE----app_msg_power_on_flag
+[00:00:45.373][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE----app_msg_power_on_flag
+[00:00:59.398][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE----app_msg_power_on_flag
+[00:01:13.423][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
+[00:01:19.501][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
+[00:03:15.808][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_OFF
+[00:03:17.479][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTION_DETACH------goto_poweroff_flag--------break-
+[00:03:18.973][LED_UI]MSG_FROM_PWM_LED----ui_pwm_led_msg_handler----LED_MSG_STATE_END
+[00:03:18.974][LED_UI]LED_STATE_END: name = 9    
+```
+
+## 有蓝牙连接记录，开机连接手机中途出仓对耳
+
+- 考虑的是最快的回连手机速度
+
+```c
+[00:00:02.263][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
+[00:00:02.607][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:02.619][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
+[00:00:02.621][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:03.305][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_PAIRED 
+[00:00:03.306][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
+[00:00:07.481][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE----app_msg_power_on_flag
+[00:00:10.624][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_CONNECTED
+[00:00:10.628][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SECOND_CONNECTED
+[00:00:15.642][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:00:15.642][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
     
-[00:05:13.002][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
-[00:05:20.972][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_LOW_LANTECY
+回连手机成功后出仓对耳
+[00:04:21.290][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTED-----
+[00:04:21.674][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:04:26.746][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
 
-[00:07:37.751][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
-[00:08:29.518][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_LOW_LANTECY    
+中途碰手机
+[00:07:24.748][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:07:24.995][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_HANGUP----BT_STATUS_A2DP_MEDIA_START----BT_STATUS_PHONE_ACTIVE 
+[00:07:30.756][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_A2DP_MEDIA_STOP
+[00:07:35.789][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+    
+中途触摸按键
+[00:09:10.659][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:09:15.678][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+    
+中途进入游戏模式再退出
+[00:10:26.488][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_LOW_LANTECY 
+[00:10:50.252][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_LOW_LANTECY
+
+中途断开对耳
+[00:11:59.295][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTION_DETACH--
+[00:11:59.405][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:12:04.442][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+    
+中途放歌再停止
+[00:15:13.149][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_HANGUP----BT_STATUS_A2DP_MEDIA_START----BT_STATUS_PHONE_ACTIVE
+[00:15:16.464][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_A2DP_MEDIA_STOP
+[00:16:57.242][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE 
+    
+中途单耳超距断开直到自动关机
+    耳机回连手机超时后，不会主动连接手机，除了手机手动回连
+[00:08:03.629][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT
+[00:08:03.652][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE
+[00:08:17.686][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE
+[00:08:31.712][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE
+[00:10:09.884][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE 
+[00:13:09.906][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_OFF
+[00:13:12.740][LED_UI]MSG_FROM_PWM_LED----ui_pwm_led_msg_handler----LED_MSG_STATE_END
+[00:13:12.741][LED_UI]LED_STATE_END: name = 9    
 ```
 
+- 如果不加限制，单耳回连手机成功后，再出仓对耳，最后的灯效可定是TWS连接灯效
+- 如果不加限制，已经连接手机了，中途触发任何灯效都会被覆盖
+- 有几个case一定不能设置灯效，因为频繁或者周期触发
 
-
-## 双耳
+## 单耳断开手机
 
 ```c
-开机(有配对记录之后)
-[00:00:01.269][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
-[00:00:01.270][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
-[00:00:02.288][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
-[00:00:02.289][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
-[00:00:02.292][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
-[00:00:08.306][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE
-[00:00:16.321][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE。。。TWS回连超时后最终
-[00:01:12.417][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
-
-开机（没有配对记录情况下）
-[00:00:01.359][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
-[00:00:01.360][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
-[00:00:02.432][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
-[00:00:02.433][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
-[00:00:02.437][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
-[00:00:08.445][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
-
-
-
-TWS配对成功
-[00:15:28.908][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
-[00:15:49.388][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTED--------
-[00:00:19.116][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODEIP
-
-TWS断开
-[00:23:47.398][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTION_DETACH--------
-[00:23:47.441][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE
-回连成功
-[00:24:57.898][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTED------------------------------
-
-
-连接手机成功
-[00:18:07.685][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_CONNECTED
-[00:18:13.728][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
-[00:18:21.728][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
-
-断开手机
-[00:19:15.220][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
-[00:19:15.366][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT
-
-超距离断开
-[00:20:47.541][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
-[00:20:47.592][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT
+[00:00:35.731][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:00:35.995][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT
+[00:00:36.298][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE    
 ```
 
-## 各灯效限定
+## 双耳断开手机
 
-- 开机
-  - `[00:00:02.169][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON`
-- 关机
-  - `[00:30:48.142][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_OFF`
-- 未连接手机之前的灯效
-  - `[00:07:00.467][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT`
-- 连接手机后的灯效
-  - `[00:04:51.325][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_CONNECTED`
-- 超距离断开
-  - `[00:01:27.064][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE`
-  - 会覆盖断开的`[00:07:00.467][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT`
-- 播放歌曲
-  - `[00:06:22.731][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_HANGUP----BT_STATUS_A2DP_MEDIA_START----BT_STATUS_PHONE_ACTIVE`
-- 停止放歌
-  - `[00:06:28.999][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_A2DP_MEDIA_STOP`
-- 来电
-  - `[00:08:33.349][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_INCOME------------------------------`
-  - `[00:08:33.427][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SCO_CONNECTION_REQ------BT_CALL_INCOMING`
-  - 避免覆盖，一个就行
-- 拒接/挂断/通话中
-  - `[00:08:40.326][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_HANGUP----BT_STATUS_A2DP_MEDIA_START----BT_STATUS_PHONE_ACTIVE`
-- TWS配对成功
-  - `[00:15:49.388][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTED--------`
-- TWS断开
-  - `[00:23:47.398][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTION_DETACH--------`
+```c
+[00:03:20.872][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT
+[00:03:20.873][PWM_LED]led_name = 10, disp_mode = 0xa
+[00:03:20.875][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SECOND_DISCONNECT
+```
 
-## 充电状态相关灯效
+## 连接手机状态下，单耳与双耳关机
 
-### 关机状态插入充电到充满
+```c
+单耳
+[00:00:35.008][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_OFF
+[00:00:35.011][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:00:35.024][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT  
+[00:00:37.828][LED_UI]MSG_FROM_PWM_LED----ui_pwm_led_msg_handler----LED_MSG_STATE_END
+[00:00:37.829][LED_UI]LED_STATE_END: name = 9
+
+双耳
+[00:00:51.537][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_OFF
+[00:00:51.547][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:00:51.557][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT
+[00:00:53.414][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTION_DETACH------goto_poweroff_flag--------break-------
+[00:00:54.712][LED_UI]MSG_FROM_PWM_LED----ui_pwm_led_msg_handler----LED_MSG_STATE_END
+[00:00:54.713][LED_UI]LED_STATE_END: name = 9    
+```
+
+- 从这里就可以看出，为啥上次关机后会有闪烁其他灯效直到彻底关机，关机灯效刚开就被覆盖了
+- 所以在蓝牙断开，TWS断开的地方要加限制，如果是关机导致的，那就只显示关机灯效。
+
+## 重点
+
+- 蓝牙连接后，不能被任何灯效打断除了是蓝牙连接后才有的功能灯效
+  - 游戏模式，放音乐，来电等
+  - 游戏模式进入可以有灯效
+    - 但是出去时要跟蓝牙连接灯效保持一致。
+      - 因为游戏模式在蓝牙连接后才能开启。
+
+## 各灯效确认
+
+最好跟提示音近一点的case，避免割裂感。
+
+### 开机灯效以及后续灯效
+
+```c
+[00:00:02.263][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
+[00:00:02.607][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:02.619][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
+[00:00:02.621][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:03.305][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_PAIRED 
+[00:00:03.306][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
+```
+
+- `APP_MSG_POWER_ON`设置为开机灯效。
+  - 复杂的步骤由函数实现
+- 其他case一概不设置灯效，避免打断。
+
+### 关机灯效
+
+```c
+[00:13:09.906][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_OFF
+[00:13:12.740][LED_UI]MSG_FROM_PWM_LED----ui_pwm_led_msg_handler----LED_MSG_STATE_END
+[00:13:12.741][LED_UI]LED_STATE_END: name = 9   
+```
+
+- `APP_MSG_POWER_OFF`设置为关机灯效。
+- `LED_MSG_STATE_END`这个不设置灯效
+- 可以通过这里的打印得知关机前的最后一个灯效效果名称
+
+### TWS连接成功
+
+```c
+[00:04:21.290][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTED-----
+[00:04:21.674][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:04:26.746][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+```
+
+- `TWS_EVENT_CONNECTED`设置为TWS连接成功的灯效
+- `BT_STATUS_SNIFF_STATE_UPDATE`这个为周期调用函数，不能设置等效。
+- TWS连接成功了，中途可能被回连case `APP_MSG_BT_IN_PAGE_MODE`打断，所以要加限制。
+  - 避免被`APP_MSG_BT_IN_PAIRING_MODE`打断，这个不能设置灯效。
+    - 因为会覆盖蓝牙断开灯效。
+- 在连接手机成功的状态下，TWS连接与断开都不允许覆盖蓝牙连接灯效
+  - 这个要加限制。
+
+### TWS连接断开
+
+```c
+[00:11:59.295][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTION_DETACH--
+[00:11:59.405][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:12:04.442][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+```
+
+- `TWS_EVENT_CONNECTION_DETACH`设置TWS断开灯效
+- 其他限制同上
+
+### 蓝牙连接灯效
+
+```c
+[00:00:10.624][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_CONNECTED
+[00:00:10.628][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SECOND_CONNECTED
+[00:00:15.642][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:00:15.642][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+```
+
+- `BT_STATUS_FIRST_CONNECTED`设置为蓝牙连接灯效
+
+- 可以覆盖蓝牙连接灯效的case:
+
+  - BT_STATUS_SNIFF_STATE_UPDATE 已经加了限制了
+
+  - TWS灯效，已经加了限制了
+
+  - ```c
+    [00:07:24.995][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_HANGUP----BT_STATUS_A2DP_MEDIA_START----BT_STATUS_PHONE_ACTIVE 
+    [00:07:30.756][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_A2DP_MEDIA_STOP
+    [00:10:50.252][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_LOW_LANTECY
+    ```
+
+    - 这一些要保证两点，进入时开启了某种灯效，退出时一定要还原到蓝牙连接灯效
+      - 这一些灯效都是蓝牙连接后才有的。
+
+### 蓝牙断开灯效
+
+```c
+单耳
+[00:00:35.731][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SNIFF_STATE_UPDATE
+[00:00:35.995][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT
+[00:00:36.298][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE  
+
+双耳
+[00:03:20.872][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT
+[00:03:20.873][PWM_LED]led_name = 10, disp_mode = 0xa
+[00:03:20.875][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SECOND_DISCONNECT
+```
+
+- `BT_STATUS_FIRST_DISCONNECT`设置蓝牙断开灯效
+  - `APP_MSG_BT_IN_PAIRING_MODE`这个不设置灯效避免打断
+- 断开时一般是要区分TWS状态的，因为一般TWS连接与断开都是有不同灯效的。那么蓝牙断开时必然要区分TWS状态。
+
+### 游戏模式灯效
+
+```c
+[00:10:50.252][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_LOW_LANTECY
+```
+
+- 进入时开启了某种灯效，退出时一定要还原到蓝牙连接灯效
+
+### 超距离断开灯效
+
+```c
+中途单耳超距断开直到自动关机
+耳机回连手机超时后，不会主动连接手机，除了手机手动回连
+[00:08:03.629][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_FIRST_DISCONNECT
+[00:08:03.652][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE
+[00:08:17.686][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE
+[00:08:31.712][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAGE_MODE
+[00:10:09.884][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_BT_IN_PAIRING_MODE 
+[00:13:09.906][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_OFF
+[00:13:12.740][LED_UI]MSG_FROM_PWM_LED----ui_pwm_led_msg_handler----LED_MSG_STATE_END
+[00:13:12.741][LED_UI]LED_STATE_END: name = 9  
+```
+
+- `BT_STATUS_FIRST_DISCONNECT`会先有一个蓝牙断开
+- `APP_MSG_BT_IN_PAGE_MODE`会覆盖蓝牙断开，而且超级快，几乎看不出问题
+  - 这个设置为超距离断开回连灯效，开机后连接蓝牙之前这个case不会有灯效
+  - 连接蓝牙之后，这个case有灯效。但是只会在超距离断开时出现，其他不会
+- `APP_MSG_BT_IN_PAIRING_MODE`没有设置灯效，不会覆盖
+
+### 充电状态相关灯效
+
+#### 关机状态插入充电到充满
 
 ```c
 [00:00:00.273][APP_CHARGE]charge_ldo5v_in_deal
@@ -876,7 +939,7 @@ S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>*****************S<>*S<>S<>S<>S<>S<>S<>S<>S<>S<>S<
 - 开启灯口保护后可以使充满灯效常亮
 - 不开启灯口保护会使充满灯效亮一会后熄灭
 
-### 充电拔出
+#### 充电拔出
 
 ```c
 [00:00:00.236][APP_CHARGE]charge_ldo5v_in_deal
