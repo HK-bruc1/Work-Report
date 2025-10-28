@@ -750,7 +750,35 @@ led_ui_set_state(LED_STA_BLUE_SLOW_FLASH, DISP_RECOVERABLE);
 [00:03:20.875][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_SECOND_DISCONNECT
 ```
 
-## 连接手机状态下，单耳与双耳关机
+## 其他流程
+
+### 单耳已连接，对耳开机后连接蓝牙以及TWS，灯效异常
+
+```c
+[00:00:02.263][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
+[00:00:02.607][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:02.619][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
+[00:00:02.621][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:03.298][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_PAIRED
+[00:00:03.299][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIRED
+[00:00:04.080][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTED-----
+```
+
+- 灯效执行到这里已经连接上了蓝牙了。
+  - `TWS_EVENT_CONNECTED`这里要进行判断，是否为蓝牙连接状态来决定闪烁什么灯效。
+  - 这里不能使用灯效标志位了，使用实际的API返回的连接状态
+- 直接断掉，双耳直接断开。可能只有入仓才会有时间主从切换吧。
+
+### 双耳已连接单耳入仓
+
+```c
+不会有任何灯效更新
+```
+
+- 所以这里不需要区分蓝牙状态。
+- TWS断开的灯效只在蓝牙未连接状态下显示即可。
+
+## 充电状态相关灯效
 
 ```c
 单耳
