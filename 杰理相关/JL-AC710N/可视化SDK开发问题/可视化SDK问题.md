@@ -2869,3 +2869,6 @@ extern void set_bt_version(u8 version);
 ![image-20251023170707978](./可视化SDK问题.assets/image-20251023170707978.png)
 
 ![image-20251023170629727](./可视化SDK问题.assets/image-20251023170629727.png)
+
+# 电源配置
+
