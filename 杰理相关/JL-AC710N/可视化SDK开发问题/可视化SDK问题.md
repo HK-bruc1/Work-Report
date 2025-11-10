@@ -2872,3 +2872,91 @@ extern void set_bt_version(u8 version);
 
 # 电源配置
 
+# 双耳全局变量的赋值
+
+`apps\earphone\include\app_main.h`
+
+```c
+typedef struct _APP_VAR {
+    u8 goto_poweroff_flag;
+    u16 goto_poweroff_cnt;
+    u8 poweroff_sametime_flag;
+    u8 play_poweron_tone;
+    u8 remote_dev_company;
+    u8 siri_stu;
+    u8 cycle_mode;
+    u8 have_mass_storage;
+    u8 poweron_reason;
+    u8 poweroff_reason;
+    u8 update_tone_end_flag;//升级完成后提示音播放结束标志位
+    int auto_stop_page_scan_timer;     //用于1拖2时，有一台连接上后，超过三分钟自动关闭Page Scan
+    u16 auto_off_time;
+    u16 warning_tone_v;
+    u16 poweroff_tone_v;
+    u16 phone_dly_discon_time;
+    u8 usb_mic_gain;
+    int wait_timer_do;
+    float audio_mic_array_diff_cmp;//麦克风阵列校准补偿值
+    u8 audio_mic_array_trim_en; //麦克风阵列校准
+    audio_mic_cmp_t audio_mic_cmp;
+    float enc_degradation;//default:1,range[0:1]
+    u32 start_time;
+    s16 mic_eff_volume;
+    u8 factory_reset_flag;//双耳恢复出厂设置标志位
+} APP_VAR;
+```
+
+这一些变量使用结构体组织起来的，方便管理。但是新增变量的话。赋值需要在同步函数中赋值才能保证双耳变量同步。
+
+比如`factory_reset_flag`
+
+- 不然利用变量判断时，只有一只耳可以利用这里变量判断。
+- 后续有需要双耳同步的变量都需要这么搞，不然无法实现效果。
+
+```c
+/*
+ * 主从同步调用函数处理
+ */
+static void tws_sync_call_fun(int cmd, int err)
+{
+    log_d("TWS_EVENT_SYNC_FUN_CMD: %d\n", cmd);
+
+    switch (cmd) {
+    case SYNC_CMD_RESET:
+        //用来关闭按键音的，避免用户认为是假关机，这里同时执行应该可以保证两只耳都是1，避免一只耳朵还是触摸生效的
+        app_var.factory_reset_flag = 1;
+		extern void factory_reset_deal_callback(void);
+        factory_reset_deal_callback();
+        break;
+    case SYNC_CMD_POWER_OFF_LDO5V_IN:
+        extern u8 charge_ldo5v_in_flag;
+        if(charge_ldo5v_in_flag == 1){
+            charge_ldo5v_in_flag = 0;
+            break;//充电这边不执行关机
+        }else {
+            sys_enter_soft_poweroff(POWEROFF_NORMAL); // 软关机复位
+            break;
+        }
+        break;
+    case SYNC_CMD_ENTER_DUT_TOGETHER:
+        //同时进入DUT模式
+        printf("SYNC_CMD_ENTER_DUT_TOGETHER\n");
+        bt_bredr_enter_dut_mode(1, 1);
+        break;
+    }
+}
+```
+
+# 开启APP均衡器中的高低音设置
+
+![image-20251110193735467](./可视化SDK问题.assets/image-20251110193735467.png)
+
+`apps\common\third_party_profile\jieli\rcsp\rcsp_cfg.h`
+
+![image-20251110194420416](./可视化SDK问题.assets/image-20251110194420416.png)
+
+- 默认就行，关闭了就要打开
+
+![image-20251110194609505](./可视化SDK问题.assets/image-20251110194609505.png)
+
+- 需要使用带人声的歌曲测试才可以听出区别。
