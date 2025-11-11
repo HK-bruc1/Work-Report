@@ -171,3 +171,69 @@ static void update_work_setting_state(void)
 }
 ```
 
+# adv_key_setting的调用链
+
+`apps\common\third_party_profile\jieli\rcsp\server\functions\rcsp_setting_opt\settings\adv_key_setting.c`
+
+- 单耳连接APP后
+
+```c
+[00:00:21.097]key_get_setting_extra_handle() 395
+[00:00:21.098]key_get_setting_extra_handle : 5 5 3 4 12 12 10 9
+进入一次key设置界面就会调用一次key_get_setting_extra_handle()
+    
+修改自定义按键设置
+[00:01:28.792]key_set_setting_extra_handle() 357
+[00:01:28.793]key_set_setting_extra_handle : 5 5 3 4 13 12 10 9
+[00:01:28.794]deal_key_setting() 175
+[00:01:28.795]get_key_setting() 124
+[00:01:28.796]get_key_setting : 5 5 3 4 13 12 10 9
+[00:01:28.797]update_key_setting_vm_value() 151
+[00:01:28.802]VM Write AFTER : 5 5 3 4 13 12 10 9
+[00:01:28.803]key_setting_sync() 162
+[00:01:28.804]key_setting_sync : 5 5 3 4 13 12 10 9
+[00:01:28.805]enable_adv_key_event() 80
+ 
+返回key界面
+[00:01:32.361]key_get_setting_extra_handle() 395
+[00:01:32.362]key_get_setting_extra_handle : 5 5 3 4 13 12 10 9
+```
+
+- 双耳中的从机
+
+```c
+只有设置自定义按键时才会调用：
+[00:03:49.365]set_key_setting() 98
+[00:03:49.366]set_key_setting : 5 5 3 4 13 13 13 9
+FE DC BA C0 C0 00 06 04 04 02 01 04 0D EF 
+[00:03:49.368]deal_key_setting() 175
+[00:03:49.369]get_key_setting() 124
+[00:03:49.370]get_key_setting : 5 5 3 4 13 13 13 9
+[00:03:49.371]update_key_setting_vm_value() 151
+[00:03:49.377]VM Write AFTER : 5 5 3 4 13 13 13 9
+[00:03:49.378]enable_adv_key_event() 80
+```
+
+## APP自定义按键空白问题
+
+两只耳机都在VM同步保存了自定义按键数据，可能从副耳中读取或者主耳中读取，如果从副耳中读取按键缓存列表的话，那么就只有一半了。
+
+```c
+static RCSP_SETTING_OPT adv_key_opt = {
+    .data_len = 8,//这里可能就涉及对耳数据传递大小了，也要一致。
+    .setting_type = ATTR_TYPE_KEY_SETTING,
+    .syscfg_id = CFG_RCSP_ADV_KEY_SETTING,
+    .deal_opt_setting = deal_key_setting,
+    .set_setting = set_key_setting,
+    .get_setting = get_key_setting,
+    .custom_setting_init = NULL,
+    .custom_vm_info_update = NULL,
+    .custom_setting_update = NULL,
+    .custom_sibling_setting_deal = NULL,
+    .custom_setting_release = NULL,
+    .set_setting_extra_handle = key_set_setting_extra_handle,
+    .get_setting_extra_handle = key_get_setting_extra_handle,
+};
+REGISTER_APP_SETTING_OPT(adv_key_opt);
+```
+

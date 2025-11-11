@@ -731,6 +731,62 @@ int tws_api_sync_call_by_uuid(int uuid, int priv, int delay_ms);
 
 直接调用`tws_sync_call_fun`传递分支也是可以的，没验证。
 
+## 带APP的恢复出厂设置
+
+恢复出厂设置时要调用以下接口，保证楚删除连接记录外，其他所有自定义功能全部恢复默认。另外避免生产过程有被自定义，因此在测试盒配对时也调用此接口做恢复默认处理
+
+```c
+u8 rcsp_setting_info_reset() //恢复默认的APP设置
+{
+    printf("%s", __func__);
+
+    u32 time_stamp = 0xffffffff;
+    syscfg_write(CFG_RCSP_ADV_TIME_STAMP, (u8 *)&time_stamp, sizeof(time_stamp));
+
+#if RCSP_ADV_NAME_SET_ENABLE 
+    u8 name[LOCAL_NAME_LEN];
+    memset(name, 0x00, sizeof(name));
+    syscfg_read_string(CFG_BT_NAME, name, sizeof(name), 0);
+    syscfg_write(CFG_BT_NAME, name, LOCAL_NAME_LEN);
+#endif 
+
+#if RCSP_ADV_KEY_SET_ENABLE
+    u8 key_setting_info[8] = {0}; //重点注意带长按跟三击时这里数组大小要改
+    memset(key_setting_info, 0xff, 8);  //重点注意带长按跟三击时这里数组大小要改
+    syscfg_write(CFG_RCSP_ADV_KEY_SETTING, key_setting_info, sizeof(key_setting_info));
+#endif
+    
+#if RCSP_ADV_LED_SET_ENABLE
+    u8 led_setting_info[3] = {0};
+    memset(led_setting_info, 0xff, 3);
+    syscfg_write(CFG_RCSP_ADV_LED_SETTING, led_setting_info, sizeof(led_setting_info));
+#endif
+
+#if RCSP_ADV_MIC_SET_ENABLE
+    u8 mic_setting_info = 0xff;
+    syscfg_write(CFG_RCSP_ADV_MIC_SETTING, &mic_setting_info, sizeof(mic_setting_info));
+#endif
+
+#if RCSP_ADV_WORK_SET_ENABLE
+    u8 work_setting_info = 0xff;
+    syscfg_write(CFG_RCSP_ADV_WORK_SETTING, &work_setting_info, sizeof(work_setting_info));
+#endif
+
+#if RCSP_ADV_EQ_SET_ENABLE
+    u8 eq_setting_info[10] = {0};
+    u8 eq_setting_mode = 0xff;
+    memset(eq_setting_info, 0xff, 10);
+    syscfg_write(CFG_RCSP_ADV_EQ_DATA_SETTING, &eq_setting_info, sizeof(eq_setting_info));
+    syscfg_write(CFG_RCSP_ADV_EQ_MODE_SETTING, &eq_setting_mode, sizeof(eq_setting_mode));
+#endif
+    return 0;
+}
+```
+
+完善：	
+
+- APP中的高低音的设置不能恢复到默认。
+
 # 灯效
 
 接口：`led_ui_set_state(LED_STA_RED_BLUE_FAST_FLASH_ALTERNATELY, DISP_CLEAR_OTHERS);`
@@ -2960,3 +3016,17 @@ static void tws_sync_call_fun(int cmd, int err)
 ![image-20251110194609505](./可视化SDK问题.assets/image-20251110194609505.png)
 
 - 需要使用带人声的歌曲测试才可以听出区别。
+
+# 按键配对中的主从与左右声道
+
+## 右边发起配对
+
+- 发起配对的一方似乎是从机。
+- 右边发起配对，就是从机。那么另一边就是主机左耳。操作刚好一致。
+
+![image-20251111160546589](./可视化SDK问题.assets/image-20251111160546589.png)
+
+## 左边发起配对
+
+![image-20251111161218191](./可视化SDK问题.assets/image-20251111161218191.png)
+
