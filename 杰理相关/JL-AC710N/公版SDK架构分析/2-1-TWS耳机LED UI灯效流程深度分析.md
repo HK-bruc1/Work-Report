@@ -800,6 +800,277 @@ led_ui_set_state(LED_STA_BLUE_SLOW_FLASH, DISP_RECOVERABLE);
 - 从这里就可以看出，为啥上次关机后会有闪烁其他灯效直到彻底关机，关机灯效刚开就被覆盖了
 - 所以在蓝牙断开，TWS断开的地方要加限制，如果是关机导致的，那就只显示关机灯效。
 
+## 出仓灯效流程
+
+```bash
+>S<>S<>S<>R**************************************************************************************************************************************************************************************************************************************************
+[00:00:07.769][APP_CHARGE]charge_ldo5v_off_deal
+[00:00:07.769][CHARGE]charge_close
+[00:00:07.770][APP_CHARGE]batmgr_send_msg(BAT_MSG_CHARGE_LDO5V_OFF, 0);
+[00:00:07.771][APP_CHARGE]set wdt to 4s!
+[00:00:07.771][APP_CHARGE]ldo5v off,task switch to BT
+[00:00:07.772]anc_resume
+[00:00:07.772][LP_KEY]lp_touch_key_charge_mode_exit
+[00:00:07.773][LP_KEY]lp_touch_key_identify_algo_reset
+[00:00:07.774][LP_KEY]lpctmu enable
+[00:00:07.774][APP_CHARGE]charge_close_deal
+[00:00:07.775][APP_CHARGE]batmgr_send_msg(BAT_MSG_CHARGE_CLOSE, 0);
+[00:00:07.776][LED_UI]MSG_FROM_BATTERY----ui_battery_msg_handler----BAT_MSG_CHARGE_LDO5V_OFF
+[00:00:07.777][PWM_LED]led_name = 2, disp_mode = 0xa
+[00:00:07.777][led_tws]led_tws_sync_start: 2
+[00:00:07.778][led_tws]led_name=2, time=0, result = -1
+[00:00:07.779][EARPHONE]bt mode
+[00:00:07.780]tone_player_faild: tone_en/bt.*
+[00:00:07.780][EARPHONE]<<<<<<<<<<<<<<bt_dual_conn_config=0>>>>>>>>>>
+[00:00:07.782]le_support:1 1
+[00:00:07.782]le_config:2 2 1 1
+[00:00:07.782][LMP]>>>btctrler_task_init<<<
+[00:00:07.794][HCI_LMP]init
+[00:00:07.794][HCI_LMP]open
+[00:00:07.795]bredr_bd_init
+[00:00:07.795]bredr_bd_init_success
+[00:00:07.796][LP_KEY]ch:4 res:3777 cur:1 net:2
+[00:00:08.113][HCI_LMP]local_name DB31
+[00:00:08.113][HCI_LMP]250 4
+[00:00:08.114][LMP]HCI_WRITE_SCAN_ENABLE : 0
+[00:00:08.115]tws_afh_init
+[00:00:08.115][PWM_LED]led_name = 2, disp_mode = 0x2
+[00:00:08.116][LED_UI]MSG_FROM_BATTERY----ui_battery_msg_handler----BAT_MSG_CHARGE_CLOSE
+[00:00:08.117][EARPHONE]BT_STATUS_INIT_OK
+[00:00:08.118]read anc_info succ,state:anc_init,mode:ANC_OFF
+[00:00:08.119]################# multi_protocol init
+[00:00:08.119]multi_protocol_profile_init 0x4000 1 0
+[00:00:08.120]spp_file: apps/common/third_party_profile/jieli/online_db/spp_online_db.c
+[00:00:08.121]app_spp_recieve_callback_register 41b678
+[00:00:08.122][POWEROFF]sys_auto_shut_down_enable
+
+[00:00:08.123]---------have tws info----------
+EE A2 09 BB 08 78 
+[00:00:08.124]tws_local_channel: R
+[00:00:08.124]dual_conn_btstack_event_handler:3
+[00:00:08.125][EARPHONE] BT STATUS DEFAULT
+[00:00:08.125]ui_bt_stack_msg_handler:3
+[00:00:08.126][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
+[00:00:08.127][PWM_LED]led_name = 11, disp_mode = 0x2
+[00:00:08.128][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_ENTER_MODE
+[00:00:08.129]tws_create_connection_internal
+
+02 A5 D5 F1 34 21 
+[00:00:08.130][BDMGR]sort_0_edr
+qpg 34
+c
+02 A5 D5 F1 34 21 
+[00:00:08.131][BDMGR]sort_0_edr
+qpg 34
+qps 34
+[00:00:08.132][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_PAIRED
+[00:00:08.133][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIREDp
+[00:00:08.162]check: 77
+cbbe
+[00:00:08.185]tws_link------1
+[00:00:08.186][BDMGR]sort_0_edr
+ide 1000
+[00:00:08.186]tws_conn_set_max_slot=5
+[00:00:08.187][BDMGR]sort_tws_0_edr
+tws 80 60 0
+ide 1000
+[00:00:08.188]tws_conn_start_probe 1 
+[00:00:08.200]tlcap_rx_role_switch_req: 4102
+
+[00:00:08.201]instant: 0
+
+[00:00:08.214]tlcap_channel_open: 4, 2
+
+[00:00:08.215][BT-TWS]tws-user: role= 1, phone_link_connection 0, reason=0,event= 2
+[00:00:08.216][BT-TWS]tws_event_pair_suss: 82
+[00:00:08.217]tws_local_channel: R
+
+[00:00:08.217][BATTERY]tws_sync_bat_level: 9,100
+[00:00:08.218]tws_sniff_check_enable
+[00:00:08.219]write_scan_conn_enable rets=0xfe318ee
+[00:00:08.219]write_scan_conn_enable=0,0
+
+[00:00:08.220][LMP]HCI_WRITE_SCAN_ENABLE : 0
+[00:00:08.221][LMP]HCI_CNACLE_CREATE_CONNECTION
+[00:00:08.222][POWEROFF]sys_auto_shut_down_disable
+[00:00:08.222][POWEROFF]sys_auto_shut_down_enable
+[00:00:08.223][LED_UI]MSG_FROM_TWS----ui_tws_msg_handler----TWS_EVENT_CONNECTED------------------------------
+[00:00:08.224][PWM_LED]led_name = 2, disp_mode = 0x2
+[00:00:08.225]online debug tws status callback 0x2 role:1
+[00:01:44.971][BATTERY]set_sibling_bat_level: 0, 10
+[00:01:44.973]set_vol[idle]:music=16
+[00:01:44.973]set_vol[idle]:call=15
+[00:01:44.974]vol_sync: 16, 15
+
+[00:01:44.974][EARPHONE]tws_sync_dual_conn_info_func: 0
+[00:01:45.171]tws_tone_play: 91a57d, tone_en/tws_conn.*
+[00:01:45.172]tone_player: tone_en/tws_conn.*
+[00:01:45.173]pipeline_uuid: 7674
+
+[00:01:45.173][CLOCK]---sys clk set : 192000000
+[00:01:45.174][CLOCK]---SYSPLL EN : 1
+[00:01:45.175][CLOCK]---D_PLL EN  : 0
+[00:01:45.175][CLOCK]---HSB CLK : 192000000
+[00:01:45.176][CLOCK]---LSB CLK : 24000000
+[00:01:45.176][CLOCK]---SFC CLK : 96000000
+[00:01:45.177][CLOCK]---HSB_PLL_DIV : 1 * 1
+[00:01:45.177][CLOCK]---LSB_PLL_DIV : 1 * 1
+[00:01:45.178][CLOCK]---SFC_DIV : 0
+[00:01:45.178][CLOCK]--SYS DVDD  adaptive:13 SFR:13 -> DVDD_VOL_123V  @ 1206mv
+[00:01:45.179][CLOCK]--SYS RVDD  adaptive:13 SFR:13 -> RVDD_VOL_123V  @ 1236mv
+[00:01:45.180][CLOCK]--SYS DCVDD fix_mode:5 SFR:5 -> DCVDD_VOL_125V @ 1252mv
+[00:01:45.181][CLOCK]---RANGE    : 6 / 0
+[00:01:45.182][JLSTREAM]create_stream: 41be78, 0
+[00:01:45.183]demuxer_type_match: tws_conn.wts
+[00:01:45.184][JLSTREAM]jlstream_multi_thread create:jlstream_0
+[00:01:45.185][P_MEM_C]Defrage disbale : 0 / 1
+[00:01:45.186][DAC]sample 44100
+[00:01:45.186][STREAM]format negotiation: suss
+  { source,             8000, 1 ch, 16bit }
+  { bt_audio_sync,      44100, 1 ch, 16bit }
+  { dac,                44100, 1 ch, 16bit }
+[00:01:45.189][JLSTREAM]frame_time: 8, 80,frame_len:128
+[00:01:45.190]vol_dB :10, -18
+[00:01:45.190]vol_2_gain: 10, 16, 2063
+[00:01:45.191]audio_state:idle->tone,max_vol:16
+[00:01:45.191]dvol_max:16384
+[00:01:45.192]set_vol[tone]:tone=10
+[00:01:45.192]vol_dB :10, -18
+[00:01:45.192]vol_2_gain: 10, 16, 2063
+[00:01:45.193][fade]state:tone,max_volume:16,cur:10,10
+[00:01:45.193]set_vol[tone]:=10
+[00:01:45.194][SW_DVOL]Gain:10,AVOL:3,DVOL:16384
+[00:01:45.194]convert_data_ioc_start bit_wide, 0 0 15
+[00:01:45.196][DAC]>>>>>>>>>>>>add dac syncts 41cfac
+[00:01:45.197][JLSTREAM]send_callback: app_core, event 8, err 0
+[00:01:45.198][DAC]__audio_dac_try_power_on
+[00:01:45.198]>>>>>>>>>>>>>>>>>> channel: 1
+[00:01:45.209]>> audio_common_power_open cur_status:0
+[00:01:45.272]sync_call: 2a1e3095
+[00:01:45.274]sync_call: 2a1e3095
+[00:01:45.329][DAC]delay set : 2204, 108, 880
+U
+[00:01:45.330][DAC]audio_dac_fifo_start : 0x0, 10, DAC_CON = 0xf802f185
+[00:01:45.331][fade]state:tone,max_volume:16,cur:10,10
+[00:01:45.331]set_vol[tone]:=10
+[00:01:45.332][SW_DVOL]Gain:10,AVOL:3,DVOL:16384
+[00:01:45.332][DAC_NODE]dac_node:<1923138976 1922678976 14375>
+[00:01:45.333]tone_callback: 8, 0
+[00:01:45.335][JLSTREAM]dst_delay: 450, 299
+[00:01:45.336]clr_device_in_page_list
+[00:01:45.336][led_tws]led_name=26, time=1, result = 2
+[00:01:45.337][PWM_LED]led_name = 26, disp_mode = 0x12
+[00:01:45.338][led_tws]led_name=26, time=1, result = 2
+[00:01:45.338][PWM_LED]led_name = 26, disp_mode = 0x12
+u
+[00:01:45.465][JLSTREAM]dec_err: 40
+u
+[00:01:45.486][JLSTREAM]dec_end: 0
+U
+[00:01:45.497][DAC]>>>>>>>>>>>>del dac syncts 41cfac
+[00:01:45.497][DAC]DAV VOL0 : 0x40004000
+[00:01:45.549][DAC]Audio DAC Stop
+[00:01:45.549][JLSTREAM]send_callback: app_core, event 10, err 0
+[00:01:45.550]tone_callback: a, 0
+[00:01:45.550][JLSTREAM]free_stream: 41be78
+[00:01:45.551][JLSTREAM]decoder_release: 41bf5c
+[00:01:45.552][JLSTREAM]release: jlstream 20
+[00:01:45.565]sync_call: 2a1e3095
+[00:01:45.566][led_tws]led_name=26, time=1, result = 2
+[00:01:45.566][PWM_LED]led_name = 26, disp_mode = 0x12
+[00:01:49.182][clock-manager]cpu0: 6% cpu1: 0% jlstream: 0% curr_clk:192000000  min_clk:24000000 dest_clk:24000000, 1
+[00:01:49.184][CLOCK]---sys clk set : 24000000
+[00:01:49.195][CLOCK]---SYSPLL EN : 1
+[00:01:49.195][CLOCK]---D_PLL EN  : 0
+[00:01:49.196][CLOCK]---HSB CLK : 24000000
+[00:01:49.187][CLOCK]---LSB CLK : 24000000
+[00:01:49.187][CLOCK]---SFC CLK : 48000000
+[00:01:49.188][CLOCK]---HSB_PLL_DIV : 1 * 1
+[00:01:49.189][CLOCK]---LSB_PLL_DIV : 1 * 1
+[00:01:49.190][CLOCK]---SFC_DIV : 0
+[00:01:49.190][CLOCK]--SYS DVDD  adaptive:2 SFR:2 -> DVDD_VOL_090V  @ 897mv
+[00:01:49.192][CLOCK]--SYS RVDD  adaptive:6 SFR:6 -> RVDD_VOL_102V  @ 1027mv
+[00:01:49.193][CLOCK]--SYS DCVDD fix_mode:5 SFR:5 -> DCVDD_VOL_125V @ 1252mv
+[00:01:49.194][CLOCK]---RANGE    : 0 / 0
+[00:01:49.974]first_ap_timer: 312
+[00:01:49.975][APP_AUDIO]VOL_SAVE 16
+[00:01:50.169][LINK]link_sniff_init_lp_ws 0
+[00:01:50.170][BDMGR]sort_tws_0_edr
+tws 400 12 0
+ide 1000
+[00:01:50.171]tws_conn_enter_sniff
+[00:01:50.172][BT-TWS]tws-user: role= 1, phone_link_connection 229, reason=15,event= 20
+[00:01:50.173][BT-TWS]TWS_EVENT_MODE_CHANGE : 1
+[00:01:50.174]online debug tws status callback 0x14 role:1
+[00:01:50.459]RESTS : 0xfe1e446
+[00:01:50.460]>> audio_common_power_close cur_status:1
+S<>wS<>w*
+[00:01:50.859]page_state: 0, 1006, 0
+
+[00:01:50.860]write_scan_conn_enable rets=0xfe3146a
+[00:01:50.861]write_scan_conn_enable=0,0
+
+[00:01:50.862][LMP]HCI_WRITE_SCAN_ENABLE : 0S<>wS<>wS<>wS<>wS<>wS<>wS<>wS<>wS<>wS<>wS<>w
+[00:01:53.182][clock-manager]cpu0: 5% cpu1: 0% jlstream: 0% curr_clk:24000000  min_clk:24000000 dest_clk:24000000, 1
+[00:01:53.184][CLOCK]---sys clk set : 24000000S<>wS<>wS<>wS<>wS<>wS<>w*******************S<>wS<>wS<>wS<>wS<>wS<>wS<>wS<>wS<>wS<>w**S<>w
+[00:01:56.619]PWMLED_TWS_SYNC_CMD_SET
+[00:01:56.620]ret = 1, how_long_ago：66250us , 0s,sync_time = 0
+[00:01:56.621]pwm_led_set_sync fail,request repeat cnt = 0S<>w
+[00:01:56.871]PWMLED_TWS_SYNC_CMD_READS<>w
+[00:01:57.120]PWMLED_TWS_SYNC_CMD_SET
+[00:01:57.120]ret = 1, how_long_ago：247500us , 0s,sync_time = 0
+[00:01:57.121]pwm_led_set_sync fail,request repeat cnt = 1
+[00:01:57.124]PWMLED_TWS_SYNC_CMD_READS<>w
+[00:01:57.182][clock-manager]cpu0: 1% cpu1: 0% jlstream: 0% curr_clk:24000000  min_clk:24000000 dest_clk:24000000, 1
+[00:01:57.184][CLOCK]---sys clk set : 24000000S<>wS<>w
+[00:01:57.610]PWMLED_TWS_SYNC_CMD_SET
+[00:01:57.611]ret = 1, how_long_ago：251250us , 0s,sync_time = 0
+[00:01:57.612]pwm_led_set_sync fail,request repeat cnt = 2
+[00:01:57.614]link_conn_exit_sniff
+[00:01:57.615][BDMGR]sort_tws_0_edr
+[00:01:57.616]	
+tws 80 12 0
+ide 1000
+[00:01:57.616]event_mode_change
+[00:01:57.617]tws_conn_exit_sniff
+[00:01:57.618][BT-TWS]tws-user: role= 0, phone_link_connection 0, reason=0,event= 20
+[00:01:57.619][BT-TWS]TWS_EVENT_MODE_CHANGE : 0
+[00:01:57.619]tws_sniff_check_enable
+[00:01:57.620]online debug tws status callback 0x14 role:0
+[00:01:57.961]sync_call: 2a1e3095
+[00:01:57.962][led_tws]led_name=26, time=1, result = 2
+[00:01:57.963][PWM_LED]led_name = 26, disp_mode = 0x12
+[00:01:58.167]sync_call: 2a1e3095
+[00:01:58.168][led_tws]led_name=26, time=1, result = 2
+[00:01:58.169][PWM_LED]led_name = 26, disp_mode = 0x12
+[00:01:58.264]sync_call: 2a1e3095
+[00:01:58.265][led_tws]led_name=26, time=1, result = 2
+[00:01:58.266][PWM_LED]led_name = 26, disp_mode = 0x12
+[00:01:58.566]sync_call: 2a1e3095
+[00:01:58.567][led_tws]led_name=26, time=1, result = 2
+[00:01:58.568][PWM_LED]led_name = 26, disp_mode = 0x12
+[00:02:01.183][clock-manager]cpu0: 2% cpu1: 0% jlstream: 0% curr_clk:24000000  min_clk:24000000 dest_clk:24000000, 1
+[00:02:01.184][CLOCK]---sys clk set : 24000000
+[00:02:02.662]first_ap_timer: 312
+[00:02:02.857][LINK]link_sniff_init_lp_ws 0
+[00:02:02.858][BDMGR]sort_tws_0_edr
+tws 400 12 0
+ide 1000
+[00:02:02.859]tws_conn_enter_sniff
+[00:02:02.860][BT-TWS]tws-user: role= 1, phone_link_connection 229, reason=15,event= 20
+[00:02:02.862][BT-TWS]TWS_EVENT_MODE_CHANGE : 1
+[00:02:02.862]online debug tws status callback 0x14 role:1
+S<>wS<>wS<>wS<>wS<>wS<>wS<>w*****************S<>wS<>wS<>wS<>wS<>w
+[00:02:05.183][clock-manager]cpu0: 1% cpu1: 0% jlstream: 0% curr_clk:24000000  min_clk:24000000 dest_clk:24000000, 1
+[00:02:05.185][CLOCK]---sys clk set : 24000000S<>wS<>wS<>wS<>wS<>wS<>wS<>wS<>wS<>wS<>wS<>wS<>wS<>wS<>wS<>wS<>wS<>w
+[00:02:09.182][clock-manager]cpu0: 1% cpu1: 0% jlstream: 0% curr_clk:24000000  min_clk:24000000 dest_clk:24000000, 1
+[00:02:09.184][CLOCK]---sys clk set : 24000000S<>wS<>w**S<>w
+[00:02:09.826]PWMLED_TWS_SYNC_CMD_SET
+[00:02:09.827]ret = 1, how_long_ago：251250us , 0s,sync_time = 0
+[00:02:09.828]pwm_led_set_sync fail,request repeat cnt = 0
+[00:02:09.830]PWMLED_TWS_SYNC_CMD_READS<>w*S<>wS<>w
+```
+
 ## 重点
 
 - 蓝牙连接后，不能被任何灯效打断除了是蓝牙连接后才有的功能灯效

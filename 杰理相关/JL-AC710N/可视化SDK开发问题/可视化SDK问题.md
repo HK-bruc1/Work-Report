@@ -3030,3 +3030,180 @@ static void tws_sync_call_fun(int cmd, int err)
 
 ![image-20251111161218191](./可视化SDK问题.assets/image-20251111161218191.png)
 
+# 修改频偏
+
+先确认机器与客户是否相同，让他们也测试一下；
+
+晶振引起的。
+
+**cpu\br36\setup.c**
+
+在setup_arch函数中自己加。
+
+![image-20250726095345496](./可视化SDK问题.assets/image-20250726095345496.png)
+
+![image-20250726095431354](./可视化SDK问题.assets/image-20250726095431354.png)
+
+![3b08f5b3c7a53fcd2b3c2b997d1d4d6](./可视化SDK问题.assets/3b08f5b3c7a53fcd2b3c2b997d1d4d6.png)
+
+- 一拖八，测频偏，如果软件修改了，一拖八也不能修改频偏。
+
+- 蓝牙盒子也可以自动校准频率
+
+# 带APP开机报游戏模式提示音
+
+```c
+static RCSP_SETTING_OPT adv_work_opt = {
+    .data_len = 1,
+    .setting_type = ATTR_TYPE_WORK_MODE,
+    .syscfg_id = CFG_RCSP_ADV_WORK_SETTING,
+    .deal_opt_setting = deal_work_setting,
+    .set_setting = set_work_setting,
+    .get_setting = get_work_setting,
+    .custom_setting_init = adv_work_opt_init,
+    .custom_vm_info_update = NULL,
+    .custom_setting_update = NULL,
+    .custom_sibling_setting_deal = NULL,
+    .custom_setting_release = NULL,
+    .set_setting_extra_handle = work_set_setting_extra_handle,
+    .get_setting_extra_handle = work_get_setting_extra_handle,
+};
+REGISTER_APP_SETTING_OPT(adv_work_opt);
+
+//开机会读取VM中的工作模式（音乐模式或者游戏模式）
+static int adv_work_opt_init(void)
+{
+    u8 work_setting_info = RCSPWorkModeNormal;
+    if (rcsp_read_data_from_vm(CFG_RCSP_ADV_WORK_SETTING, &work_setting_info, sizeof(work_setting_info))) {
+        if (work_setting_info != RCSPWorkModeNormal && work_setting_info != RCSPWorkModeGame) {
+            //如果从VM中啥也没有读取到，等于空，不然一定会报一个提示音
+            work_setting_info = RCSPWorkModeNone;
+        }
+        printf("%s, %s, %d, work_setting_info:%d\n", __FILE__, __FUNCTION__, __LINE__, work_setting_info);
+        //赋值工作模式
+        set_work_setting(&work_setting_info);
+        //进入对应模式
+        update_work_setting_state();
+    }
+    return 0;
+}
+
+static void update_work_setting_state(void)
+{
+#if TCFG_USER_TWS_ENABLE
+    if (get_bt_tws_connect_status() && (tws_api_get_role() == TWS_ROLE_SLAVE)) {
+        return;
+    }
+#endif
+    if (RCSPWorkModeNormal == g_work_mode) {
+        printf("%s, false\n", __FUNCTION__);
+        //APP直接切换时不会走灯效流程，这里直接设置退出游戏模式灯效
+        update_normal_led();
+        bt_set_low_latency_mode(0, 1, 300);
+    } else if (RCSPWorkModeGame == g_work_mode) {
+        printf("%s, true\n", __FUNCTION__);
+        //APP直接切换时不会走灯效流程，这里直接设置游戏模式灯效
+        update_game_led();
+        bt_set_low_latency_mode(1, 1, 300);
+    } else {
+        printf("%s, set deal none\n", __FUNCTION__);
+    }
+}
+```
+
+## 不要将工作模式存入VM
+
+```c
+static RCSP_SETTING_OPT adv_work_opt = {
+    .data_len = 1,
+    .setting_type = ATTR_TYPE_WORK_MODE,
+    .syscfg_id = CFG_RCSP_ADV_WORK_SETTING,
+    .deal_opt_setting = deal_work_setting,
+    .set_setting = set_work_setting,
+    .get_setting = get_work_setting,
+    .custom_setting_init = adv_work_opt_init,
+    .custom_vm_info_update = NULL,
+    .custom_setting_update = NULL,
+    .custom_sibling_setting_deal = NULL,
+    .custom_setting_release = NULL,
+    .set_setting_extra_handle = work_set_setting_extra_handle,
+    .get_setting_extra_handle = work_get_setting_extra_handle,
+};
+//APP直接切换时走这里
+static void deal_work_setting(u8 *work_setting_info, u8 write_vm, u8 tws_sync)
+{
+    if (work_setting_info) {
+        //赋值工作模式
+        set_work_setting(work_setting_info);
+        //printf("rcsp_work %s, %s, %d, work_setting:%d\n", __FILE__, __FUNCTION__, __LINE__, work_setting_info); */
+    }
+    if (write_vm) {
+        //存入VM
+        adv_work_setting_vm_value(&g_work_mode);
+    }
+#if TCFG_USER_TWS_ENABLE
+    if (tws_sync) {
+        if (get_bt_tws_connect_status()) {
+            update_rcsp_setting(ATTR_TYPE_WORK_MODE);
+        }
+    }
+#endif
+    //进入对应模式
+    update_work_setting_state();
+}
+
+static void adv_work_setting_vm_value(u8 *work_setting_info)
+{
+    //工作以及游戏模式不写入VM，避免开机报提示音
+    //syscfg_write(CFG_RCSP_ADV_WORK_SETTING, work_setting_info, sizeof(u8));
+}
+```
+
+按键进入的话
+
+```c
+void rcsp_set_work_mode(RCSPWorkMode work_mode)
+{
+    u8 _work_mode = work_mode;
+#if TCFG_USER_TWS_ENABLE
+    if (get_bt_tws_connect_status()) {
+        if (TWS_ROLE_MASTER == tws_api_get_role()) {
+            deal_work_setting(&_work_mode, 1, 1);
+        }
+    } else {
+        deal_work_setting(&_work_mode, 1, 1);
+    }
+#else
+    deal_work_setting(&_work_mode, 1, 1);
+#endif
+    u8 adv_cmd = 0x0;
+    adv_info_device_request(&adv_cmd, sizeof(adv_cmd));
+}
+```
+
+# 打开同步鸿蒙音量
+
+## 问题描述
+
+1. **鸿蒙系统手机播放音乐时候，长按音量无反应**
+2. **兼容性这块音量和华为手机不同步**
+   1. 蓝牙设置中**蓝牙设备音量与手机同步**开关没有打开
+
+![image-20251115172247399](./可视化SDK问题.assets/image-20251115172247399.png)
+
+在蓝牙初始化完成时调用
+
+- `apps\earphone\earphone.c`
+
+```c
+case BT_STATUS_INIT_OK:
+        /*
+         * 蓝牙初始化完成
+         */
+        EARPHONE_CUSTOM_EARPHONE_KEY_INIT();
+        log_info("BT_STATUS_INIT_OK\n");
+	    //鸿蒙系统打开音量同步
+        void set_bt_manufacturer_info(u16 cid,u16 svn);
+        set_bt_manufacturer_info(0x004c,0x7100);
+```
+
