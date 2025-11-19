@@ -15,7 +15,7 @@
 
 当前这个宏被设置为 `0`，意味着在更新时会擦除该VM区域。如果设置为 `1`，则在更新时会保留该区域的数据不被擦除。
 
-# 开关机以及电源
+# 电源相关
 
 ## 低电提醒时间
 
@@ -316,6 +316,77 @@ static void tws_sync_call_fun(int cmd, int err)
     }
 }
 ```
+
+## 充电电流与截至电流
+
+![image-20251117161550652](./可视化SDK问题.assets/image-20251117161550652.png)
+
+### 系数与挡位的关系
+
+#### 充电电流
+
+```c
+/*
+ 	充电电流选择
+	恒流：30-225mA
+    实际充电电流=恒流档位*分频器
+*/
+#define CHARGE_mA_30			0
+#define CHARGE_mA_37P5			1
+#define CHARGE_mA_45			2
+#define CHARGE_mA_52P5			3
+#define CHARGE_mA_60			4
+#define CHARGE_mA_75			5
+#define CHARGE_mA_90			6
+#define CHARGE_mA_105			7
+#define CHARGE_mA_120			8
+#define CHARGE_mA_135			9
+#define CHARGE_mA_150			10
+#define CHARGE_mA_165			11
+#define CHARGE_mA_180			12
+#define CHARGE_mA_195			13
+#define CHARGE_mA_210			14
+#define CHARGE_mA_225			15
+//电流分频器
+#define CHARGE_DIV_1            0x00
+#define CHARGE_DIV_2            0x10
+#define CHARGE_DIV_3            0x20
+#define CHARGE_DIV_4            0x30
+#define CHARGE_DIV_5            0x60
+#define CHARGE_DIV_6            0x70
+#define CHARGE_DIV_7            0xa0
+#define CHARGE_DIV_8            0xb0
+#define CHARGE_DIV_9            0xe0
+#define CHARGE_DIV_10           0xf0
+
+.charge_mA				= TCFG_CHARGE_MA | TCFG_CHARGE_DIV,         //充电电流
+```
+
+- 直接使用宏体名称计算即可。
+
+#### 截至电流
+
+```c
+/*充满判断电流为恒流电流的比例配置*/
+#define CHARGE_FC_IS_CC_DIV_5	5 // full current = constant_current / 5
+#define CHARGE_FC_IS_CC_DIV_6	6
+#define CHARGE_FC_IS_CC_DIV_7	7
+#define CHARGE_FC_IS_CC_DIV_8	8
+#define CHARGE_FC_IS_CC_DIV_9	9
+#define CHARGE_FC_IS_CC_DIV_10	10
+#define CHARGE_FC_IS_CC_DIV_11	11
+#define CHARGE_FC_IS_CC_DIV_12	12
+#define CHARGE_FC_IS_CC_DIV_13	13
+#define CHARGE_FC_IS_CC_DIV_14	14
+#define CHARGE_FC_IS_CC_DIV_15	15
+#define CHARGE_FC_IS_CC_DIV_16	16
+#define CHARGE_FC_IS_CC_DIV_17	17
+#define CHARGE_FC_IS_CC_DIV_18	18
+#define CHARGE_FC_IS_CC_DIV_19	19
+#define CHARGE_FC_IS_CC_DIV_20	20
+```
+
+直接除以得出。
 
 # TWS相关
 
@@ -2926,8 +2997,6 @@ extern void set_bt_version(u8 version);
 
 ![image-20251023170629727](./可视化SDK问题.assets/image-20251023170629727.png)
 
-# 电源配置
-
 # 双耳全局变量的赋值
 
 `apps\earphone\include\app_main.h`
@@ -3207,3 +3276,8 @@ case BT_STATUS_INIT_OK:
         set_bt_manufacturer_info(0x004c,0x7100);
 ```
 
+# 出仓开机提示音后配对提示音不同步
+
+TWS配对消息不是统一在主耳中处理的，而是在各自耳机中处理，只是有判断，让主机执行同步播放TWS配对成功提示音函数而已。
+
+具体代码待整理。
