@@ -2228,7 +2228,7 @@ static int get_pipeline_uuid(const char *name)
 
 # 接口
 
-## 用来获取蓝牙连接的设备个数，不包含page状态的计数
+## 判断蓝牙连接状态
 
 ```c
 if (bt_get_total_connect_dev() == 0) {    //已经没有设备连接
@@ -2239,6 +2239,24 @@ if (bt_get_total_connect_dev() == 0) {    //已经没有设备连接
     	led_ui_set_state(LED_STA_RED_FLASH_1TIMES_PER_5S, DISP_CLEAR_OTHERS);
     }
 }
+
+if (BT_STATUS_CONNECTING == bt_get_connect_status())
+    
+int tws_state = tws_api_get_tws_state();
+
+int num = btstack_get_conn_devices(devices, 2);
+    for (int i = 0; i < num; i++) {
+        int state = bt_get_phone_state(devices[i]);
+        if (state == BT_CALL_ACTIVE) {
+            active_device = devices[i];
+        } else if (state == BT_CALL_INCOMING) {
+            incoming_device = devices[i];
+        } else if (state == BT_CALL_OUTGOING || state == BT_CALL_ALERT) {
+            outgoing_device = devices[i];
+        } else if (state == BT_SIRI_STATE) {
+            siri_device = devices[i];
+        }
+    }
 ```
 
 **TWS状态下似乎可以生效，但是单耳状态无法通过判断。**
@@ -2249,7 +2267,12 @@ if (bt_get_total_connect_dev() == 0) {    //已经没有设备连接
 bt_a2dp_get_status() == BT_MUSIC_STATUS_STARTING
 ```
 
+## 断开TWS连接
 
+```c
+tws_api_remove_pairs();//包含后者，不知道区别。有断开提示音有灯效更新。
+bt_tws_remove_pairs();
+```
 
 # 其他
 
@@ -3280,4 +3303,184 @@ case BT_STATUS_INIT_OK:
 
 TWS配对消息不是统一在主耳中处理的，而是在各自耳机中处理，只是有判断，让主机执行同步播放TWS配对成功提示音函数而已。
 
-具体代码待整理。
+## 增加一个双耳全局同步变量
+
+`apps\earphone\include\app_main.h`
+
+```c
+    u32 start_time;
+    s16 mic_eff_volume;
+    u8 factory_reset_flag;//双耳恢复出厂设置标志位
+
+#if _CHARGE_OUT_TONE_ENABLE
+    u8 tone_tws_connected_slave_flag;//从机同步给主机的TWS连接成功提示音标志位
+#endif
+
+} APP_VAR;
+```
+
+## 增加同步修改标志位的命令
+
+`apps\earphone\mode\bt\bt_tws.c`
+
+```c
+    SYNC_CMD_PLEASE_OPEN_XIAODU_TONE,//请打开小度
+#endif
+
+    SYNC_CMD_RESET, //新增公共枚举值，不区分项目
+    
+#if _CHARGE_OUT_TONE_ENABLE
+    SYNC_CMD_TONE_TWS_ON,//双耳同步播放tws连接成功的提示音命令，用于从机向主耳传递标志位
+    SYNC_CMD_TONE_TWS_OFF,//主耳用于清除双耳的TWS连接成功提示音标志位
+#endif
+    
+    SYNC_CMD_OPUS_CLOSE,
+    SYNC_CMD_ENTER_DUT_TOGETHER,//新增公共枚举值，不区分项目
+};
+
+/*
+ * 主从同步调用函数处理
+ */
+static void tws_sync_call_fun(int cmd, int err)
+{
+    log_d("TWS_EVENT_SYNC_FUN_CMD: %d\n", cmd);
+
+    switch (cmd) {
+  //......
+#if _CHARGE_OUT_TONE_ENABLE
+    case SYNC_CMD_TONE_TWS_ON:
+        //同步执行，传递从机标志位
+        app_var.tone_tws_connected_slave_flag = 1;
+        break;
+    case SYNC_CMD_TONE_TWS_OFF:
+        //同步执行，传递从机标志位
+        app_var.tone_tws_connected_slave_flag = 0;
+        break;
+#endif
+    case SYNC_CMD_POWER_OFF_LDO5V_IN:
+        extern u8 charge_ldo5v_in_flag;
+        if(charge_ldo5v_in_flag == 1){
+            charge_ldo5v_in_flag = 0;
+            break;//充电这边不执行关机
+        }else {
+            sys_enter_soft_poweroff(POWEROFF_NORMAL); // 软关机复位
+            break;
+        }
+        break;
+    case SYNC_CMD_ENTER_DUT_TOGETHER:
+        //同时进入DUT模式
+        printf("SYNC_CMD_ENTER_DUT_TOGETHER\n");
+        bt_bredr_enter_dut_mode(1, 1);
+        break;
+    }
+}
+```
+
+## 添加主机标志位
+
+`apps\earphone\mode\bt\tone.c`
+
+```c
+static u16 tws_dly_discon_time = 0;
+#if _CHARGE_OUT_TONE_ENABLE
+static u8 tone_tws_connected_master_flag = 0;
+static u8 tone_tws_connected_time = 0;
+#endif
+
+#if _CHARGE_OUT_TONE_ENABLE
+void tone_tws_connected_deal(void *priv)
+{
+    if (tone_tws_connected_time == 0) {
+        return;
+    }
+
+    if(app_var.tone_tws_connected_slave_flag && tone_tws_connected_master_flag){
+        printf("===========>主从机都满足tws_tone条件\n");
+        tws_play_tone_file(get_tone_files()->tws_connect, 400);
+    }
+    //清除各标志位
+    if (tone_tws_connected_time) {
+        sys_timeout_del(tone_tws_connected_time);
+        tone_tws_connected_time = 0;
+    }
+    tws_api_sync_call_by_uuid('T', SYNC_CMD_TONE_TWS_OFF, 300);
+    tone_tws_connected_master_flag = 0;
+}
+#endif
+
+static int tone_tws_event_handler(int *_event)
+{
+    struct tws_event *event = (struct tws_event *)_event;
+    int role = event->args[0];
+    int reason = event->args[2];
+
+    switch (event->event) {
+    case TWS_EVENT_CONNECTED:
+        g_tws_connected = 1;
+        if (tws_dly_discon_time) {
+            sys_timeout_del(tws_dly_discon_time);
+            tws_dly_discon_time = 0;
+            break;
+        }
+        if (role == TWS_ROLE_MASTER) {
+            int state = tws_api_get_tws_state();
+            if (state & (TWS_STA_SBC_OPEN | TWS_STA_ESCO_OPEN)) {
+                break;
+            }
+            
+#if _CHARGE_OUT_TONE_ENABLE
+            tone_tws_connected_master_flag = 1;
+            printf("===========>主耳tone_tws置位\n");
+#endif
+
+#if ((TCFG_LE_AUDIO_APP_CONFIG & (LE_AUDIO_UNICAST_SINK_EN | LE_AUDIO_JL_UNICAST_SINK_EN)))
+            u32 slave_info =  event->args[3] | (event->args[4] << 8) | (event->args[5] << 16) | (event->args[6] << 24) ;
+            printf("====slave_info:%x\n", slave_info);
+            if ((slave_info & TWS_STA_LE_AUDIO_PLAYING) || is_cig_music_play() || is_cig_phone_call_play()) {
+                break;
+            }
+#endif
+#if TCFG_USER_TWS_ENABLE
+    #if _CHARGE_OUT_TONE_ENABLE
+                //主耳TWS连接报提示音时，从机的出仓提示音可能还没报完
+                //给个超时定时器,最好大于出仓开机提示音时长
+                tone_tws_connected_time = sys_timeout_add(NULL, tone_tws_connected_deal,_TONE_TWS_CONNECTED_DEAL_TIME);
+    #else
+                tws_play_tone_file(get_tone_files()->tws_connect, 400);
+    #endif
+#else
+            play_tone_file(get_tone_files()->tws_connect);
+#endif
+        }
+    #if _CHARGE_OUT_TONE_ENABLE
+        else if(role == TWS_ROLE_SLAVE){
+            //在各自耳机中处理的。只不过从机不处理TWS配对成功提示音，主耳使用同步提示音函数实现同步播放
+            //如果是从机连接了置位，从机开机提示音没有播完之前不太可能到这里
+            tws_api_sync_call_by_uuid('T', SYNC_CMD_TONE_TWS_ON, 300);
+            printf("===========>从耳tone_tws置位,并传递给主机\n");
+        }
+    #endif
+        break;
+```
+
+# 首次连上苹果手机播歌，操作手机上的音量按键，减到最后1格的时候没有声音，再继续往下减到0再加上了又正常
+
+`apps\earphone\audio\vol_sync.c`
+
+```c
+//注册给库的回调函数，用户手机设置设备音量
+void set_music_device_volume(int volume)
+{
+    r_printf("set_music_device_volume=%d\n", volume);
+
+    //苹果手机音量最后一个格时没有声音
+    if((volume < 7) && (volume != 0)){
+        volume = 7;
+    }
+
+#if TCFG_BT_VOL_SYNC_ENABLE
+```
+
+# 省RAM
+
+- 带APP放歌，切siri时，APP界面出现BLE复位现象，经典蓝牙没有掉（有时也掉）。
