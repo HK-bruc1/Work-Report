@@ -3481,6 +3481,11 @@ void set_music_device_volume(int volume)
 #if TCFG_BT_VOL_SYNC_ENABLE
 ```
 
-# 省RAM
+# BLE的APP在通话时断开重连
 
-- 带APP放歌，切siri时，APP界面出现BLE复位现象，经典蓝牙没有掉（有时也掉）。
+- 在可视化工具中，打开BLE的高优先级，可能导致通话卡顿需要测试。
+- 还是断开重连的话，再省RAM。
+
+# 经典蓝牙地址与BLE地址位置
+
+![image-20251125153309295](./可视化SDK问题.assets/image-20251125153309295.png)
