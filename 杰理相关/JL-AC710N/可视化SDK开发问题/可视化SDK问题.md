@@ -2274,6 +2274,44 @@ tws_api_remove_pairs();//包含后者，不知道区别。有断开提示音有�
 bt_tws_remove_pairs();
 ```
 
+## 延时函数
+
+```c
+__INITCALL_BANK_CODE
+void check_power_on_key(void)
+{
+    u32 delay_10ms_cnt = 0;
+
+    while (1) {
+        wdt_clear();
+        os_time_dly(1);
+
+        if (get_power_on_status()) {
+            putchar('+');
+            delay_10ms_cnt++;
+            if (delay_10ms_cnt > _SOFTOFF_WAKEUP_TIME) {
+                app_var.poweron_reason = SYS_POWERON_BY_KEY;
+                return;
+            }
+        } else {
+            log_info("enter softpoweroff\n");
+            delay_10ms_cnt = 0;
+            app_var.poweroff_reason = SYS_POWEROFF_BY_KEY;
+            power_set_soft_poweroff();
+        }
+    }
+}
+```
+
+## 关机
+
+```c
+power_set_soft_poweroff();//不带提示音的
+sys_enter_soft_poweroff(POWEROFF_NORMAL_TWS); // 软关机复位
+```
+
+
+
 # 其他
 
 ## 开在线调音
