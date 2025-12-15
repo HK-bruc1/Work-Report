@@ -492,10 +492,19 @@ PWM模式下，芯片的PWM外设会：
 
 ## 测试延迟数据
 
-- 需要提供耳机喇叭阻值
+- 蓝牙连接测试的耳机需要提供耳机喇叭阻值
   - 问客户或者硬件
 
-# 添加le audio
+## 添加le audio
 
 - 前提是耳机端与dongle端都要有le audio的配置项。不然只能走经典蓝牙edr.延迟也大很多。
 
+## 添加PA增强信号需要降低dongle发射功率
+
+![image-20251215114125694](./Dongle.assets/image-20251215114125694.png)
+
+![ec6449c724d5e7a99adffdf68c710b2f](./Dongle.assets/ec6449c724d5e7a99adffdf68c710b2f.png)
+
+- 文档说降低是为了避免烧坏PA芯片
+
+- 一档或二档，0dbm附近
