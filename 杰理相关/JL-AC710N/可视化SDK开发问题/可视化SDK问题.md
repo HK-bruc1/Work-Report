@@ -3786,3 +3786,80 @@ Rntc = 100600 * (1023 - AD) / AD
 
 ![image-20251215144756166](./可视化SDK问题.assets/image-20251215144756166.png)
 
+# 带APP后ANC记忆失效
+
+APP也会记忆ANC的模式，需要用ANC记忆宏包起来：
+
+`apps\common\third_party_profile\jieli\rcsp\server\functions\rcsp_setting_opt\settings\adv_anc_voice.c`
+
+```c
+#if ANC_INFO_SAVE_ENABLE
+    update_anc_voice_vm_value(g_anc_info);
+#endif
+```
+
+## 第一次切ANC模式没有提示音
+
+`apps\common\third_party_profile\jieli\rcsp\server\functions\rcsp_setting_opt\settings\adv_anc_voice.c`
+
+```c
+static void anc_voice_effect_set(u8 *anc_setting, u8 mode, s16 value)
+{
+    static s16 value_old = -1;
+#if TCFG_AUDIO_ANC_ENABLE
+    if (value != value_old) {
+        extern void audio_anc_fade_gain_set(int gain);
+        audio_anc_fade_gain_set(value);
+    }
+    if (anc_setting) {
+        if (-1 == value_old) {
+#if ANC_INFO_SAVE_ENABLE
+            anc_mode_switch(mode + 1, 0);
+#else
+            anc_mode_switch(mode + 1, 1);//fix:ANC不记忆，带APP第一次不报提示音
+#endif
+        } else {
+            anc_mode_switch(mode + 1, 1);
+        }
+    } else {
+#if TCFG_USER_TWS_ENABLE
+        if ((-1 == value_old) || (get_bt_tws_connect_status() && (count_the_num_of_positions(get_adv_anc_event_status()) > 1))) {
+#else
+        if (-1 == value_old) {
+#endif
+            anc_mode_switch(mode + 1, 0);
+        } else {
+            anc_mode_switch(mode + 1, 1);
+        }
+    }
+#endif
+    value_old = value;
+}
+```
+
+## 关闭带APP中默认的rcsp功能模块
+
+`apps\common\third_party_profile\jieli\rcsp\rcsp_cfg.h`
+
+- MIC设置不需要
+
+```c
+// 默认的功能模块使能
+#define RCSP_ADV_NAME_SET_ENABLE        						1		// 蓝牙名设置
+#define RCSP_ADV_KEY_SET_ENABLE         						1		// 按键设置
+#define RCSP_ADV_LED_SET_ENABLE         						0		// 灯光设置
+#define RCSP_ADV_MIC_SET_ENABLE         						0//1		// mic设置
+#define RCSP_ADV_WORK_SET_ENABLE        						1		// 模式设置（游戏模式）
+#define RCSP_ADV_HALTER_ENABLE									0		// 挂脖功能
+#define RCSP_ADV_EQ_SET_ENABLE          			TCFG_EQ_ENABLE		// eq设置
+#define RCSP_ADV_MUSIC_INFO_ENABLE      						1		// 音乐信息设置
+#define RCSP_ADV_HIGH_LOW_SET									1		// 高低音设置
+#define RCSP_ADV_FIND_DEVICE_ENABLE     						1		// 查找设备设置
+#define RCSP_ADV_PRODUCT_MSG_ENABLE     						1		// 获取产品信息
+#define RCSP_ADV_COLOR_LED_SET_ENABLE   						0		// 彩灯设置
+#define RCSP_ADV_KARAOKE_SET_ENABLE								0		// 卡拉OK设置
+#define RCSP_ADV_KARAOKE_EQ_SET_ENABLE							0		// 卡拉OK EQ设置
+#define RCSP_ADV_AI_NO_PICK										0		// 智能免摘
+#define RCSP_ADV_ASSISTED_HEARING								0		// 辅听，注意开启辅听后，需要关闭ANC相关功能
+```
+
