@@ -3862,4 +3862,3 @@ static void anc_voice_effect_set(u8 *anc_setting, u8 mode, s16 value)
 #define RCSP_ADV_AI_NO_PICK										0		// 智能免摘
 #define RCSP_ADV_ASSISTED_HEARING								0		// 辅听，注意开启辅听后，需要关闭ANC相关功能
 ```
-

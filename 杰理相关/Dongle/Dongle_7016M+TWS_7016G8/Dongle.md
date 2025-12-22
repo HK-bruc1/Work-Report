@@ -26,7 +26,7 @@
         init_conn_timer = sys_timeout_add((void *)1, page_page_scan_switch, 100);
 ```
 
-## 修改灯效
+## 灯效
 
 ### led的启用
 
@@ -59,7 +59,7 @@ platform_initcall(board_led_config);//调用系统的初始化。
 #endif /* #if TCFG_PWMLED_ENABLE */
 ```
 
-## 与可视化工具的对应以及状态的对应
+### 与可视化工具的对应以及状态的对应
 
 - `apps\dongle\adapter\ui\led\led_ui_manager.h`
 
@@ -133,11 +133,11 @@ typedef enum {
 
 - 具体配置在可视化工具中配置
 
-## 耳机断开
+### 耳机断开
 
-### 灯效
+#### 灯效
 
-`apps\dongle\adapter\board\br28\led_config.c`
+`apps\dongle\adapter\ui\ui_app_msg_pwmled.c`
 
 - `led_ui_normal_status_deal`
 
@@ -158,7 +158,7 @@ case LED_STA_POWERON:
 
 经过验证，可以通过这里修改灯效。
 
-### 日志
+#### 日志
 
 ```bash
 [00:03:03.187][LMP]LMP_SNIFF_REQ
@@ -220,7 +220,7 @@ ide 1000
 PIPIPIPIPIPIPIPIPIPIPI
 ```
 
-## EDR连接耳机
+#### EDR连接耳机
 
 ```bash
 [00:09:03.718]rx_link_buff_size=684
@@ -418,7 +418,7 @@ xA
 [00:09:09.812][LMP]LMP_POWER_CONTROL_REQ
 ```
 
-## 高低电平点灯？
+### 高低电平点灯？
 
 单IO推双灯的结构，高低电平无法直接切换灯，只能重新设置输出模式，经过一个高阻态。。。
 
@@ -442,7 +442,7 @@ VCC
         GND
 ```
 
-### 为什么直接切换电平不工作？
+#### 为什么直接切换电平不工作？
 
 当你设置 `OUTPUT_HIGH` 点亮LED2后：
 
@@ -478,7 +478,7 @@ VCC
 
 - 添加限流电阻可以改善切换特性。
 
-### 为什么PWM模式下正常？
+#### 为什么PWM模式下正常？
 
 PWM模式下，芯片的PWM外设会：
 
@@ -489,6 +489,54 @@ PWM模式下，芯片的PWM外设会：
 而直接操作GPIO模式，软件切换不够"干净"。
 
 单IO双灯切换时**必须经过高阻态过渡**，这不是bug而是电路特性决定的必要步骤。
+
+### 新版JL710N灯效位置
+
+- `apps\dongle\adapter\ui\ui_app_msg_pwmled.c`
+
+```c
+#if TCFG_ADAPTER_PWMLED_ENABLE
+static int ui_led_mode_bt_status(int *msg)
+{
+    switch (msg[0]) {
+    case APP_MSG_STATUS_BT_STANDBY:// 切换模式，未配对
+        if (msg[1] == LED_MODE_EDR) {
+            led_effect_output_handler(LED0_LED1_ASYNC_FAST_FLASH);
+        } else if (msg[1] == LED_MODE_CIS) {
+            led_effect_output_handler(LED0_SLOW_FLASH);
+        } else if (msg[1] == LED_MODE_BIS) {
+            led_effect_output_handler(LED0_SINGLE_FLASH);
+        }
+        break;
+    case APP_MSG_STATUS_BT_CREATE_CONN:// 创建连接
+        led_effect_output_handler(LED0_LED1_ASYNC_FAST_FLASH);
+        break;
+    case APP_MSG_STATUS_BT_CONNECTED:// 连接待机
+        led_effect_output_handler(LED1_BREATHE);
+        break;
+    case APP_MSG_STATUS_BT_PLAY:// 播歌
+        led_effect_output_handler(LED1_SINGLE_FLASH);
+        break;
+    case APP_MSG_STATUS_BT_CALL:// 通话
+        led_effect_output_handler(LED1_DOUBLE_FLASH);
+        break;
+    case APP_MSG_STATUS_BT_ENTER_DUT:// 进入DUT
+        if (!msg[1]) {
+            led_effect_output_handler(LED0_LED1_ASYNC_DOUBLE_FAST_FLASH);
+        } else {
+            led_effect_output_handler(LED0_LED1_ASYNC_DOUBLE_SLOW_FLASH);
+        }
+    }
+    return 0;
+}
+
+APP_MSG_HANDLER(ui_led_status) = {
+    .owner		= 0xff,
+    .from		= MSG_FROM_APP,
+    .handler	= ui_led_mode_bt_status,
+};
+#endif
+```
 
 ## 测试延迟数据
 
@@ -514,3 +562,83 @@ PWM模式下，芯片的PWM外设会：
 ![image-20251216101204596](./Dongle.assets/image-20251216101204596.png)
 
 - 公版的解码与编码格式不要改动，不然出现连接后声音乱码。
+
+## 开启DUT
+
+![image-20251222193223164](./Dongle.assets/image-20251222193223164.png)
+
+- 上电进入就是DUT，无法连接到耳机。
+- 直接return了。
+
+```c
+/*************************************************************************************************/
+/*!
+ *  \brief      蓝牙初始化完成
+ *
+ *  \param      [in]
+ *
+ *  \return
+ *
+ *  \note
+ */
+/*************************************************************************************************/
+void bt_status_init_ok(void)
+{
+    g_bt_hdl.init_ok = 1;
+
+#if (CONFIG_CPU_BR56 && TCFG_BT_BLE_TX_POWER > 4)
+    log_info("set_txpwr_extend_lev---1");
+    set_txpwr_extend_lev(1);
+#endif
+
+    bt_init_ok_search_index();
+
+    if (dongle_is_handshake_to_dut()) {
+#if TCFG_USER_EDR_ENABLE
+        bt_enter_dut_mode(0);
+#elif TCFG_USER_BLE_ENABLE
+        bt_enter_dut_mode(1);
+#else
+        ;
+#endif
+        return ;
+    }
+
+#if TCFG_NORMAL_SET_EDR_DUT_MODE
+    bt_enter_dut_mode(0);
+    return;
+#endif
+
+#if TCFG_NORMAL_SET_BLE_DUT_MODE
+    bt_enter_dut_mode(1);
+    return;
+#endif
+
+#if (TCFG_USER_BLE_ENABLE || TCFG_BT_BLE_ADV_ENABLE)
+    if (BT_MODE_IS(BT_BQB)) {
+        ble_bqb_test_thread_init();
+    } else if (BT_MODE_IS(BT_NORMAL)) {
+#if TCFG_THIRD_PARTY_PROTOCOLS_SEL
+        if (app_var.ble_update_switch) {
+            bt_ble_init();
+
+        }
+#endif
+    }
+#endif
+
+#if ((CONFIG_BT_MODE == BT_BQB)||(CONFIG_BT_MODE == BT_PER))
+    return;
+#endif
+
+#if TCFG_TWS_INIT_AFTER_POWERON_TONE_PLAY_END
+    if (tone_player_runing()) {
+        return;
+    }
+#endif
+#if TCFG_USER_TWS_ENABLE
+    bt_tws_poweron();
+#endif
+}
+```
+
