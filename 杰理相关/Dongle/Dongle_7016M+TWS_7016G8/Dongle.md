@@ -1,21 +1,5 @@
 # Dongle
 
-## 耳机710N配7016M做dongle
-
-### 耳机SDK
-
-![企业微信截图_17599104692939](./Dongle.assets/企业微信截图_17599104692939.png)
-
-功能打不开似乎，默认打开，插在电脑上可以直接连接。
-
-### dongle对应SDK
-
-![企业微信截图_17599104893389](./Dongle.assets/企业微信截图_17599104893389.png)
-
-![企业微信截图_17599134968985](./Dongle.assets/企业微信截图_17599134968985.png)
-
-公版按照文档操作，可以使用电脑利用2.4G连接到耳机。但是连接速度和断开速度太慢。
-
 ## 减少dongle开机被动等待连接时间
 
 `apps\dongle\adapter\mode\bt\edr\edr_conn_play.c`
@@ -556,6 +540,8 @@ APP_MSG_HANDLER(ui_led_status) = {
 - 文档说降低是为了避免烧坏PA芯片
 
 - 一档或二档，0dbm附近
+  - 具体多少需要问PA厂商。
+
 
 ## 连接后声音乱码
 
@@ -640,5 +626,125 @@ void bt_status_init_ok(void)
     bt_tws_poweron();
 #endif
 }
+```
+
+## EDR配置低延迟
+
+### dongle端
+
+#### 关闭USB麦克风使能
+
+- 关错了，或者两个都关闭会出现问题
+  - 都关闭声音直接外放了，即使连接了。
+  - 关错了导致连接不上，或者连接很慢。
+- 该延时测试通常仅测试下行通路的延时，即dongle播歌到耳机DAC输出该段通路的传输时间，打开USB麦克风使能后会打开上行通路，dongle连接头戴式会多一路解码器的耗时，连接tws耳机会多出两路解码器的耗时，建议延时测试时先关闭该使能，保证延时的准确性。
+
+![image-20251224175511812](./Dongle.assets/image-20251224175511812.png)
+
+#### 打开播歌低延迟
+
+![image-20251224195032791](./Dongle.assets/image-20251224195032791.png)
+
+- 关闭BLE以及第三方协议。蓝牙发射功率感觉都会影响。
+
+#### 打开DELAY_TEST_MODE宏
+
+- sdk/apps/dongle/adapter/app_config.h需打开DELAY_TEST_MODE宏
+  - 该延时测试宏仅作为低延时测试时的修改，测试低延时先打开；非延时测试时务必关闭。
+  - 原厂说影响不大。
+
+```c
+#define DELAY_TEST_MODE           1 //延时测试模式不开OTG
+```
+
+### 耳机端
+
+#### 打开播歌低延迟
+
+#### 关闭耳机降噪
+
+- dongle端
+
+`apps\dongle\adapter\log_config\lib_media_config.c`
+
+```c
+//<DAC NoiseGate>
+#if TCFG_MIC_EFFECT_ENABLE
+const int config_audio_dac_noisefloor_optimize_enable = 0;
+#else
+const int config_audio_dac_noisefloor_optimize_enable = 0;//BIT(1);
+#endif/*TCFG_MIC_EFFECT_ENABLE*/
+```
+
+- 耳机端
+
+`apps\earphone\log_config\lib_media_config.c`
+
+```c
+/*DAC NoiseGate Config:
+  DAC_NG_THRESHOLD_CLEAR 	= BIT(0)：信号小于等于噪声门阈值，清0
+  DAC_NG_THRESHOLD_MUTE		= BIT(0)|BIT(2)：信号小于等于噪声门阈值，清0并mute
+  DAC_NG_SILENCE_MUTE		= BIT(1)：信号静音(全0)时候mute
+*/
+#if (defined(TCFG_AUDIO_DAC_NOISEGATE_ENABLE) && TCFG_AUDIO_DAC_NOISEGATE_ENABLE)
+const int config_audio_dac_noisefloor_optimize_enable = DAC_NG_THRESHOLD_MUTE;
+#else
+const int config_audio_dac_noisefloor_optimize_enable = 0;
+#endif
+```
+
+#### 老板SDK
+
+- patch08
+- `apps\earphone\log_config\lib_btctrler_config.c`
+
+```c
+#define TCFG_JL_DONGLE_PLAYBACK_LATENCY 30//自己加一个定义
+
+#ifdef TCFG_LE_AUDIO_PLAY_LATENCY
+const int CONFIG_LE_AUDIO_PLAY_LATENCY = TCFG_LE_AUDIO_PLAY_LATENCY; // le_audio延时（us）
+#else
+const int CONFIG_LE_AUDIO_PLAY_LATENCY = 0; // le_audio延时（us）
+#endif
+
+#ifdef TCFG_JL_DONGLE_PLAYBACK_LATENCY
+const int CONFIG_JL_DONGLE_PLAYBACK_LATENCY = TCFG_JL_DONGLE_PLAYBACK_LATENCY; // dongle下行播放延时(msec)
+#else
+const int CONFIG_JL_DONGLE_PLAYBACK_LATENCY = 0; // dongle下行播放延时(msec)
+#endif
+```
+
+- `apps\earphone\board\br56\sdk_config.h`
+
+```c
+#define TCFG_THIRD_PARTY_PROTOCOLS_ENABLE 0 // 第三方协议配置
+#if TCFG_THIRD_PARTY_PROTOCOLS_ENABLE
+#define TCFG_RCSP_DUAL_CONN_ENABLE 0 // 支持连接两路RCSP
+#define TCFG_THIRD_PARTY_PROTOCOLS_SIMPLIFIED 0 // 三方协议轻量化
+#define TCFG_THIRD_PARTY_PROTOCOLS_SEL 0 // 第三方协议选择
+#endif // TCFG_THIRD_PARTY_PROTOCOLS_ENABLE
+#define TCFG_BT_DONGLE_ENABLE 1//自己加一个定义
+#define TCFG_JL_DONGLE_PLAYBACK_LATENCY 30//自己加一个定义
+// ------------蓝牙配置.json------------
+```
+
+#### 开启耳机端的游戏模式
+
+```c
+#define CONFIG_A2DP_GAME_MODE_ENABLE            1//0  //游戏模式
+#define CONFIG_A2DP_GAME_MODE_DELAY_TIME        35  //游戏模式延时ms
+
+
+//*********************************************************************************//
+//      低延时游戏模式脚步声、枪声增强,需使能蓝牙音乐10段eq以及蓝牙音乐drc
+//      用户开关宏AUDIO_GAME_EFFECT_CONFIG(开关蓝牙低延时模式的游戏音效)
+//      低延时eq效果文件使用eq_game_eff.bin,调试时需保存成该文件,并在批处理-res后添加
+//      非低延时eq效果文件使用eq_cfg_hw.bin,也需在批处理-res后添加
+//*********************************************************************************//
+#if CONFIG_A2DP_GAME_MODE_ENABLE
+#define AUDIO_GAME_EFFECT_CONFIG  0//1  //低延时游戏模式脚步声、枪声增强 1:使能、0：关闭
+#else
+#define AUDIO_GAME_EFFECT_CONFIG  0  //低延时游戏模式脚步声、枪声增强 1:使能、0：关闭
+#endif
 ```
 

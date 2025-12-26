@@ -2310,6 +2310,13 @@ power_set_soft_poweroff();//不带提示音的
 sys_enter_soft_poweroff(POWEROFF_NORMAL_TWS); // 软关机复位
 ```
 
+## TWS连接状态
+
+```
+if (get_bt_tws_connect_status())
+int tws_state = tws_api_get_tws_state();
+```
+
 
 
 # 其他
