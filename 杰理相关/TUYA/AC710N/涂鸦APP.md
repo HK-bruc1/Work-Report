@@ -18,7 +18,7 @@
 #define TY_HARD_VER_STR	     "1.0"
 ```
 
-- 通过这一个ID呈现不同的界面与功能。是区分其他设置的核心标识。
+- 通过这一个ID呈现不同的界面与功能。是区分其他设备的核心标识。
 
 # 主图以及产品图分辨率要求
 
@@ -28,7 +28,7 @@
 
 # 编译器版本要求
 
-调试涂鸦不能使用2.4.9以及以后版本编译器，否则涂鸦app出现无法搜到ble情况
+调试涂鸦不能使用2.4.9以及以后版本编译器，否则涂鸦app出现无法搜到ble情况。
 
 # 确实是否有BLE
 
@@ -48,7 +48,24 @@
 
 ![image-20251223121909535](./涂鸦APP.assets/image-20251223121909535.png)
 
-# 涂鸦指令接收后执行流程（公版）
+# 涂鸦恢复出厂设置相关
+
+```c
+tuya_ble_device_unbind();//解绑BLE
+tuya_ble_device_factory_reset();
+local_tuya_key_func_reset();
+tuya_key_reset();//用来上报当前数值到app
+char eq_info[11] = {0};
+syscfg_write(CFG_RCSP_ADV_EQ_DATA_SETTING, eq_info, 11);
+u8 name[LOCAL_NAME_LEN];
+memset(name, 0x00, sizeof(name));
+```
+
+- DPID指令处理还是按键触发的？
+
+- 目前的按键重置只是重置按键而已。
+
+# 涂鸦指令接收后执行流程
 
 ## 发送停止歌曲指令
 
@@ -298,6 +315,28 @@ p
 [00:10:18.105]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:13, type:0x0, mode:0x0, ack:0x0, status:0x0pppp#pppp
 ```
 
+#### 单击设置无功能
+
+```c
+[00:18:29.809][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:18:29.817]tuya_app_cb_handler, evt:0x43, task:app_core
+[00:18:29.818]tuya_data_parse, p_data:0x105094, len:5
+13 04 00 01 08 
+[00:18:29.820]<--------------  tuya_data_parse  -------------->
+[00:18:29.821]get_sn = a, id = 19, type = 4, data_len = 1, data:
+08 
+[00:18:29.828]覆盖数组左边短按位置----tuya_key_event_swith(data[0]):8----dp_id:19
+[00:18:29.834]tuya syscfg_write error = 12, please check
+p
+[00:18:29.901][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:18:29.907]tuya_app_cb_handler, evt:0x51, task:app_core
+[00:18:29.908]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:16, type:0x0, mode:0x0, ack:0x0, status:0x0ppp
+```
+
+- APP发送过来的DPID是:19
+- 附带的按键功能标识为:8
+  - 刚好是APP按键设置中按键列表的下标顺序（从0开始）
+
 ### 定义双击左右
 
 - 左
@@ -448,24 +487,6 @@ p
 [00:17:17.965]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:13, type:0x0, mode:0x0, ack:0x0, status:0x0p
 ```
 
-### 单击设置无功能
-
-```c
-[00:18:29.809][tuya_demo]write_callback, handle= 0x0006,size = 52 
-[00:18:29.817]tuya_app_cb_handler, evt:0x43, task:app_core
-[00:18:29.818]tuya_data_parse, p_data:0x105094, len:5
-13 04 00 01 08 
-[00:18:29.820]<--------------  tuya_data_parse  -------------->
-[00:18:29.821]get_sn = a, id = 19, type = 4, data_len = 1, data:
-08 
-[00:18:29.828]覆盖数组左边短按位置----tuya_key_event_swith(data[0]):8----dp_id:19
-[00:18:29.834]tuya syscfg_write error = 12, please check
-p
-[00:18:29.901][tuya_demo]write_callback, handle= 0x0006,size = 52 
-[00:18:29.907]tuya_app_cb_handler, evt:0x51, task:app_core
-[00:18:29.908]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:16, type:0x0, mode:0x0, ack:0x0, status:0x0ppp
-```
-
 ### 默认缓存数组中的含义
 
 ```c
@@ -489,8 +510,9 @@ u8 key_table_r[KEY_ACTION_MAX] = {
 ```
 
 - `apps\common\third_party_profile\tuya_protocol\app\demo\tuya_ble_app_demo.c`
-  - tuya_data_parse函数可以选择修改缓存数组的位置，决定缓存数组不同位置的含义。
-  - 不行！涂鸦APP传递指令是可以修改。但是按键触发时是按照宏值对应数组下标映射。擅自修改会打乱！
+  - tuya_data_parse函数可以选择修改缓存数组的位置，决定缓存数组不同位置的按键含义？
+  - 不行！涂鸦APP的DPID指令处理是可以修改。但是按键触发时是按照按键类型的宏值对应数组下标映射。擅自修改会打乱！
+    - 原本的映射流程有问题。
 
 ```c
 case 19:
@@ -503,13 +525,13 @@ case 19:
     break;
 ```
 
-#### 同步的参数怎么传递？
 
-## APP中的按键自定义值时的缓存数组的映射原理
+
+## APP中的按键自定义值时的映射转换
 
 ```c
 
-/* 涂鸦app对应功能索引映射到sdk按键枚举，APP中按键列表是什么功能，这里写对应的映射处理消息即可。顺序从0开始。 */
+/* 涂鸦app对应功能索引映射到sdk按键枚举，APP中按键列表是什么功能，这里写对应的映射处理消息即可。下标顺序从0开始。 */
 u8 tuya_key_event_swith(u8 event)
 {
     u8 ret = APP_MSG_NULL;
@@ -563,7 +585,7 @@ u8 tuya_key_event_swith(u8 event)
 
 - APP中按键列表是什么功能，这里写对应的映射处理消息即可。顺序从0开始。
 
-## APP发送过来的指令的入口
+## APP发送过来的指令的处理入口
 
 - `apps\common\third_party_profile\tuya_protocol\app\demo\tuya_ble_app_demo.c`
 
@@ -581,60 +603,80 @@ void tuya_data_parse(tuya_ble_cb_evt_param_t *event)
     uint8_t *data = &event->dp_received_data.p_data[4];
     printf("<--------------  tuya_data_parse  -------------->");
     printf("get_sn = %x, id = %d, type = %d, data_len = %d, data:", get_sn, dp_id, type, data_len);
-    u8 key_value_record[2][6] = {0};//初始化一个数组，记录按键值。两行六列，先左后右
+    u8 key_value_record[2][7] = {0};//初始化一个数组，记录按键值。两行7列，先左后右
     put_buf(data, data_len);
     int value = 0;
+
+    u8 tuya_anc_mode = 0;
+    
     switch (dp_id) {
     case DPID_TONE_PLAY_TYPE:
         //iot播报模式
         printf("tuya iot broadcast set to: %d\n", data[0]);
         break;
-    case DPID_VOL_SET:
-        //音量设置
-        printf("tuya voice set to :%d\n", data[3]);
-        tuya_set_music_volume(data[3]);
-        tuya_sync_info_send(&data[3], APP_TWS_TUYA_SYNC_VOLUME);
+    //...
+    case DPID_ONE_CLICK_LEFT:
+        //左边单击
+        printf("覆盖数组左边短按位置----tuya_key_event_swith(data[0]):%d----dp_id:%d\n", data[0],dp_id);
+        key_table_l[0] = tuya_key_event_swith(data[0]);//根据传递的指令将按键映射到缓存按键功能值数组中。
+        tuya_update_vm_key_info(key_value_record);//记录更新后的左右两边的按键功能值
+        value = syscfg_write(TUYA_SYNC_KEY_INFO, key_value_record, sizeof(key_value_record));//将记录的左右两边的按键功能值存入VM
+        tuya_sync_info_send(&key_table_l[0], APP_TWS_TUYA_SYNC_KEY_L1);//对耳同步缓存按键数组信息
         break;
-    case DPID_MUSIC_PREV_NEXT:
-        //切换控制
-        printf("tuya change_control: %d\n", data[0]);
-        tuya_ctrl_music_state(data[0]);
+    case DPID_ONE_CLICK_RIGHT:
+        //右边单击
+        printf("覆盖数组右边短按位置----tuya_key_event_swith(data[0]):%d----dp_id:%d\n", data[0],dp_id);
+        key_table_r[0] = tuya_key_event_swith(data[0]);
+        tuya_update_vm_key_info(key_value_record);
+        value = syscfg_write(TUYA_SYNC_KEY_INFO, key_value_record, sizeof(key_value_record));
+        tuya_sync_info_send(&key_table_r[0], APP_TWS_TUYA_SYNC_KEY_R1);
         break;
-    case DPID_MUSIC_PP:
-        //播放/暂停
-        printf("tuya play state:%d\n", data[0]);
-        /* tuya_post_key_event(TUYA_MUSIC_PP); */
-        bt_cmd_prepare(USER_CTRL_AVCTP_OPID_PLAY, 0, NULL);
-        break;
-    case DPID_ANC_SWITCH_MODE:
-        //设置降噪模式
-#if TCFG_AUDIO_ANC_ENABLE
-        anc_mode_switch(data[0], 1);
+//...
+    case DPID_KEY_RESET:
+        //按键重置
+        printf("tuya key reset, sn:%x", sn);
+        tuya_reset_key_info();//重置缓存数组
+        for (int i = 0; i < 7; i++) {//赋值给临时数组并写入VM
+            key_value_record[0][i] = key_table_l[i];
+            key_value_record[1][i] = key_table_r[i];
+        }
+        syscfg_write(TUYA_SYNC_KEY_INFO, key_value_record, sizeof(key_value_record));
+        tuya_sync_info_send(NULL, APP_TWS_TUYA_SYNC_KEY_RESET);//对耳同步按键重置信息,将同步相关标志位置1
+#if (TUYA_BLE_PROTOCOL_VERSION_HIGN == 0x03)
+        tuya_ble_dp_data_report(data, data_len); //1
 #endif
-        tuya_info.noise_info.noise_mode = data[0];
-        printf("tuya noise_mode: %d\n", tuya_info.noise_info.noise_mode);
+#if (TUYA_BLE_PROTOCOL_VERSION_HIGN == 0x04)
+        tuya_ble_dp_data_send(sn, DP_SEND_TYPE_ACTIVE, DP_SEND_FOR_CLOUD_PANEL, DP_SEND_WITH_RESPONSE, data, data_len);
+#endif
+        tuya_key_reset_indicate();//上报APP按键列表流程
+        return;
+//...
+    case 45:
+        //设置通透强度
+        tuya_info.noise_info.trn_set = data[3];
+        printf("tuya trn_set:%d\n", tuya_info.noise_info.trn_set);
         break;
-    case 9:
-        //设置降噪场景
-        tuya_info.noise_info.noise_scenes = data[0];
-        printf("tuya noise_scenes:%d\n", tuya_info.noise_info.noise_scenes);
+    default:
+        printf("unknow control msg len = %d\n, data:", data_len);
         break;
-    case 10:
-        //设置通透模式
-        tuya_info.noise_info.transparency_scenes = data[0];
-        printf("tuya transparency_scenes: %d\n", tuya_info.noise_info.transparency_scenes);
-        break;
-    case 11:
-        //设置降噪强度
-        tuya_info.noise_info.noise_set = data[3];
-        printf("tuya noise_set: %d\n", tuya_info.noise_info.noise_set);
-        break;
- //...       
+    }
+    if (value <= 0) {
+        printf("tuya syscfg_write error = %d, please check\n", value);
+    }
+#if (TUYA_BLE_PROTOCOL_VERSION_HIGN == 0x03)
+    tuya_ble_dp_data_report(event->dp_received_data.p_data, data_len + 4); //1
+#endif
+#if (TUYA_BLE_PROTOCOL_VERSION_HIGN == 0x04)
+    tuya_ble_dp_data_send(sn, DP_SEND_TYPE_ACTIVE, DP_SEND_FOR_CLOUD_PANEL, DP_SEND_WITH_RESPONSE, event->dp_received_data.p_data, data_len + 4);
+#endif
+}
 ```
 
 - **涂鸦平台可以指定发送对应事件的DPID值。这里就是针对对应的DPID做处理。**
 
 # 耳机按键触发流程
+
+- 将回调函数都注册进入OS中当产生对应消息类型时，就会直接调用进行处理。
 
 ```c
 /*****************tuya demo api*******************/
@@ -680,12 +722,13 @@ int tuya_key_msg_handler(int *msg)
 {
     g_printf("tuya_key_msg_handler----msg[0]:0x%x\n", msg[0]);
     int key_msg = 0;
-    tuya_earphone_key_remap(&key_msg, msg);//这里的msg已经是触摸按键事件类型了。
+    tuya_earphone_key_remap(&key_msg, msg);//这里的msg已经是触摸按键事件类型了,key_msg出来就变成APP层的处理消息了。
     printf("KEY消息映射成对应APP_MSG_XX:%d\n", key_msg);
-#if 0//TCFG_USER_TWS_ENABLE 这里会卡住，直接发送消息到APP层处理。刚好跟普通按键转换流程一样，只让一直耳机执行。
+#if 0//TCFG_USER_TWS_ENABLE 使用这里会卡住。改为直接发送消息到APP层处理。刚好跟普通按键转换流程一样，只让一只耳机执行。
     bt_tws_key_msg_sync(key_msg);
 #else
-    app_send_message(key_msg, 0);
+    app_send_message(key_msg, 0);//意味着所有注册进OS-APP层消息处理的回调函数都会走一遍。例如tuya_app_msg_handler
+    //也被app_enter_bt_mode函数的app_get_message拿到了进入对应的MSG_FROM_APP
 #endif
     return true;  //中断消息分发
 }
@@ -694,7 +737,7 @@ int tuya_key_msg_handler(int *msg)
 void tuya_earphone_key_remap(int *value, int *msg)
 {
     struct key_event *key = (struct key_event *)msg;
-    //int index = key->event;//这个一直是0，不能用作映射了,直接根据按键事件类型的宏值来映射
+    //int index = key->event;//这个一直是0，不能用作映射了,直接根据按键事件类型的宏值作为下标来映射数组中对应的APP层消息,根据enum key_action顺序来
     int index = (int)msg[0];
     g_printf("key_remap----key->event:%d----按键事件:%d----消息是否来自对耳:%d,----对耳消息宏值:%d\n", index, msg[0], msg[1], APP_KEY_MSG_FROM_TWS);
 #if TCFG_USER_TWS_ENABLE
@@ -702,27 +745,32 @@ void tuya_earphone_key_remap(int *value, int *msg)
         if (tws_api_get_local_channel() == 'R') {
             if (msg[1] == APP_KEY_MSG_FROM_TWS) {
                 *value = key_table_l[index];
+                g_printf("*value%d<----key_table_l[%d]:%d\n", *value, index,key_table_l[index]);
             } else {
                 *value = key_table_r[index];
+                g_printf("*value%d<----key_table_r[%d]:%d\n", *value, index,key_table_r[index]);
             }
         } else {
             if (msg[1] == APP_KEY_MSG_FROM_TWS) {
                 *value = key_table_r[index];
+                g_printf("*value%d<----key_table_r[%d]:%d\n", *value, index,key_table_r[index]);
             } else {
                 *value = key_table_l[index];
+                g_printf("*value%d<----key_table_l[%d]:%d\n", *value, index,key_table_r[index]);
             }
         }
     } else
 #endif
     {
         *value = key_table_l[index];
+        g_printf("*value%d<----key_table_l[%d]:%d\n", *value, index,key_table_l[index]);
     }
 }
 ```
 
 ## 单击
 
-- 不开启TWS时，还是走默认的APP层消息处理。`tuya_app_msg_handler`还是会调用这个函数。
+- 不开启TWS时，还是走默认的APP层消息处理。`tuya_app_msg_handler`还是会被调用。
 
 ```c
 int tuya_key_msg_handler(int *msg)
@@ -751,28 +799,12 @@ int tuya_key_msg_handler(int *msg)
 
 - 开启TWS时会卡住导致复位
 
-```c
-int tuya_key_msg_handler(int *msg)
-{
-    g_printf("tuya_key_msg_handler----msg[0]:0x%x\n", msg[0]);
-    int key_msg = 0;
-    tuya_earphone_key_remap(&key_msg, msg);//这里的msg已经是触摸按键事件类型了。
-    printf("KEY消息映射成对应APP_MSG_XX:%d\n", key_msg);
-#if 0//TCFG_USER_TWS_ENABLE 这里会卡住，直接发送消息到APP层处理。刚好跟普通按键转换流程一样，只让一直耳机执行。
-    bt_tws_key_msg_sync(key_msg);
-#else
-    app_send_message(key_msg, 0);
-#endif
-    return true;  //中断消息分发
-}
-```
-
 ## 涂鸦按键流程不走普通按键流程
 
 ### 普通流程
 
 - `apps\earphone\mode\bt\earphone.c`
-- 这里获取消息，并映射。进行消息分发到不同case
+- 这里获取消息，并映射。映射成APP层消息后直接进行消息分发到不同case。不会发消息。
 
 ```c
 struct app_mode *app_enter_bt_mode(int arg)
@@ -834,7 +866,7 @@ int tuya_key_msg_handler(int *msg)
 {
     g_printf("tuya_key_msg_handler----msg[0]:0x%x\n", msg[0]);
     int key_msg = 0;
-    tuya_earphone_key_remap(&key_msg, msg);//这里的msg已经是触摸按键事件类型了。
+    tuya_earphone_key_remap(&key_msg, msg);//这里的msg已经是触摸按键事件类型了,key_msg出来就变成APP层的处理消息了。
     printf("KEY消息映射成对应APP_MSG_XX:%d\n", key_msg);
 #if 0//TCFG_USER_TWS_ENABLE 这里会卡住，直接发送消息到APP层处理。刚好跟普通按键转换流程一样，只让一直耳机执行。
     bt_tws_key_msg_sync(key_msg);
@@ -844,7 +876,7 @@ int tuya_key_msg_handler(int *msg)
     return true;  //中断消息分发
 }
 
-//各APP层的处理这里制定了，但是使用app_send_message接口会被普通流程的app_get_message拿到再走一次。没有映射了。内部有判断直接跳过了。
+//各APP层消息类型的回调处理函数在这里已经注册，但是使用app_send_message接口会被普通流程的app_get_message拿到再走一次。没有映射了。内部有判断直接跳过了。
 APP_MSG_HANDLER(tuya_bthci_msg_entry) = {
     .owner      = 0xff,
     .from       = MSG_FROM_BT_HCI,
@@ -887,7 +919,6 @@ APP_MSG_PROB_HANDLER(tuya_key_msg_entry) = {
 - 映射流程有问题
 
 ```c
-//映射成具体的APP_MSG_XX
 void tuya_earphone_key_remap(int *value, int *msg)
 {
     struct key_event *key = (struct key_event *)msg;
@@ -929,7 +960,7 @@ int tuya_key_msg_handler(int *msg)
 {
     g_printf("tuya_key_msg_handler----msg[0]:0x%x\n", msg[0]);
     int key_msg = 0;
-    tuya_earphone_key_remap(&key_msg, msg);//这里的msg已经是触摸按键事件类型了。
+    tuya_earphone_key_remap(&key_msg, msg);//这里的msg已经是触摸按键事件类型了,key_msg出来就变成APP层的处理消息了。
     printf("KEY消息映射成对应APP_MSG_XX:%d\n", key_msg);
 #if 0//TCFG_USER_TWS_ENABLE 这里会卡住，直接发送消息到APP层处理。刚好跟普通按键转换流程一样，只让一直耳机执行。
     bt_tws_key_msg_sync(key_msg);
@@ -951,22 +982,7 @@ void tuya_bt_ble_init(void)
 {
     log_info("***** ble_init******\n");
     const char *name_p;
-
-#if TUYA_DOUBLE_BT_SAME_NAME
-    u8 ext_name_len = 0;
-#else
-    u8 ext_name_len = sizeof(ble_ext_name) - 1;
-#endif
-    tuya_ble_operation_register(&tuya_ble_operation);
-
-    name_p = bt_get_local_name();
-    gap_device_name_len = strlen(name_p);
-    if (gap_device_name_len > BT_NAME_LEN_MAX - ext_name_len) {
-        gap_device_name_len = BT_NAME_LEN_MAX - ext_name_len;
-    }
-
-    memcpy(gap_device_name, name_p, gap_device_name_len);
-
+//...
 #if TUYA_DOUBLE_BT_SAME_NAME == 0
     //增加后缀，区分名字
     memcpy(&gap_device_name[gap_device_name_len], "(BLE)", ext_name_len);
@@ -974,15 +990,7 @@ void tuya_bt_ble_init(void)
 #endif
 
     log_info("ble name(%d): %s \n", gap_device_name_len, gap_device_name);
-
-#if ATT_DATA_RECIEVT_FLOW
-    log_info("att_server_flow_enable\n");
-    att_server_flow_enable(1);
-#endif
-
-    set_ble_work_state(BLE_ST_INIT_OK);
-    ble_module_enable(1);
-
+//...
     extern void tuya_ble_app_init();
     tuya_ble_app_init();
 }
@@ -993,71 +1001,7 @@ void tuya_ble_app_init(void)
 
     int ret = 0;
     tuya_earphone_key_init();//开始读取VM中存储的涂鸦缓存数组
-
-    device_param.use_ext_license_key = 1;
-    if (device_param.device_id_len == 16) {
-#if TUYA_INFO_TEST
-        memcpy(device_param.auth_key, (void *)auth_key_test, AUTH_KEY_LEN);
-        memcpy(device_param.device_id, (void *)device_id_test, DEVICE_ID_LEN);
-        memcpy(device_param.mac_addr.addr, mac_test, 6);
-#else
-        uint8_t read_buf[16 + 32 + 12 + 1] = {0};
-        flash_ret = read_tuya_product_info_from_flash(read_buf, sizeof(read_buf));
-        if (flash_ret == TRUE) {
-            uint8_t mac_data[6];
-            memcpy(device_param.device_id, read_buf, 16);
-            memcpy(device_param.auth_key, read_buf + 16, 32);
-            parse_mac_data(read_buf + 16 + 32, mac_data);
-            memcpy(device_param.mac_addr.addr, mac_data, 6);
-            memcpy((u8 *)&triple_info.data, read_buf, TUYA_TRIPLE_LENGTH);
-            triple_info.flag = 1;
-        } else {
-            triple_info.flag = 2;
-            vm_read_result = syscfg_read(VM_TUYA_TRIPLE, (u8 *)&vm_triple, TUYA_TRIPLE_LENGTH);
-            printf("vm result: %d\n", vm_read_result);
-            printf("read vm data:");
-            put_buf((u8 *)&vm_triple, 0x40);
-            memcpy((u8 *)&triple_info.data, (u8 *)&vm_triple, TUYA_TRIPLE_LENGTH);
-            if (vm_read_result == TUYA_TRIPLE_LENGTH) {
-                uint8_t mac_data[6];
-                memcpy(device_param.device_id, (u8 *)&vm_triple, 16);
-                memcpy(device_param.auth_key, (u8 *)&vm_triple + 16, 32);
-                parse_mac_data((u8 *)&vm_triple + 16 + 32, mac_data);
-                memcpy(device_param.mac_addr.addr, mac_data, 6);
-                printf("read after write vm data:");
-                put_buf((u8 *)&vm_triple, 0x40);
-            } else  {
-                printf("tripe  null");
-                put_buf((u8 *)&vm_triple_info, TUYA_TRIPLE_LENGTH);
-                triple_info.flag = 0;
-            }
-
-        }
-#endif /* TUYA_INFO_TEST */
-        device_param.mac_addr.addr_type = TUYA_BLE_ADDRESS_TYPE_RANDOM;
-    }
-    printf("device_id:");
-    put_buf(device_param.device_id, 16);
-    printf("auth_key:");
-    put_buf(device_param.auth_key, 32);
-    printf("mac:");
-    put_buf(device_param.mac_addr.addr, 6);
-    app_ble_set_mac_addr(tuya_ble_hdl, (void *)device_param.mac_addr.addr);
-
-    device_param.p_type = TUYA_BLE_PRODUCT_ID_TYPE_PID;
-    device_param.product_id_len = 8;
-    memcpy(device_param.product_id, APP_PRODUCT_ID, 8);
-    device_param.firmware_version = TY_APP_VER_NUM;
-    device_param.hardware_version = TY_HARD_VER_NUM;
-    tuya_get_vm_id_register(app_tuya_get_vm_id);
-    tuya_one_click_connect_init();
-    tuya_ble_sdk_init(&device_param);
-    ret = tuya_ble_callback_queue_register(tuya_app_cb_handler);
-    y_printf("tuya_ble_callback_queue_register,ret=%d\n", ret);
-
-    //tuya_ota_init();
-
-    //printf("demo project version : "TUYA_BLE_DEMO_VERSION_STR);
+   //...
     printf("app version : "TY_APP_VER_STR);
 }
 
@@ -1080,13 +1024,13 @@ void tuya_earphone_key_init()
            key_table_l[0], key_table_l[1], key_table_l[2], key_table_l[3], 
            key_table_l[4], key_table_l[5], key_table_l[6]);
     // 右耳所有7个按键值 (0-6)  
-    printf("Right ear keys[0-6]: 单击%d 长按:%d 长按保持:%d 长按抬起:%d 双击:%d 三击:%d 四击:%d\n", 
+    printf("Right ear keys[0-6]: 单击:%d 长按:%d 长按保持:%d 长按抬起:%d 双击:%d 三击:%d 四击:%d\n", 
            key_table_r[0], key_table_r[1], key_table_r[2], key_table_r[3], 
            key_table_r[4], key_table_r[5], key_table_r[6]);
 }
 ```
 
-- 不修改APP中的按键时，操作是对的，说明缓存数组的是对的。 修改之后操作是对的，显示也正常。
+- 不修改APP中的按键时，操作是对的，说明缓存数组的是对的。只是没有上报到APP
 
 ## 说明第一次上报缓存数组映射时出现了错误
 
@@ -1115,19 +1059,8 @@ case DPID_KEY_RESET:
         return;
 
 //这里估计可以设置重置成什么按键。RCSP的恢复默认原理没有搞懂。这里就是直接转换。
-//这里没有覆盖整个缓存数组
-void tuya_reset_key_info()
-{
-    key_table_l[0] = tuya_key_event_swith(0);
-    key_table_l[2] = tuya_key_event_swith(1);
-    key_table_l[4] = tuya_key_event_swith(2);
-    
-    key_table_r[0] = tuya_key_event_swith(0);
-    key_table_r[2] = tuya_key_event_swith(1);
-    key_table_r[4] = tuya_key_event_swith(2);
-}
-
-//按照目前的映射方式来看需要把缓存数组全部覆盖
+//公版这里没有覆盖整个缓存数组
+//按照目前的映射方式来看需要把缓存数组全部覆盖，上报后由TUYA根据DPID决定是否展示
 void tuya_reset_key_info()
 {
     key_table_l[0] = tuya_key_event_swith(TUYA_EVENT_MSG_NULL);
@@ -1189,11 +1122,11 @@ void tuya_sync_info_send(void *tuya_info, u8 data_type)
 - 上报是根据APP中的按键列表的功能ID来上报
 - 重置缓存按键是根据ID去映射对应APP层处理处理消息宏值。
 - 增加上报按键的话。注意涂鸦DPID的上报与下发一致性。
-  - 还对应修改很多东西。
+  - 还要对应修改很多东西。
 
 ```c
 /**
- * @brief  循环给APP各按键栏目发送功能按键ID信息
+ * @brief  循环赋值给APP各按键栏目设置功能ID。ID为APP中按键列表的顺序下标
  * @note   p_dp_data.id 根据具体的DPID去锚定。APP下发DPID也是一致的
  * @note   如果要增加栏目数量(例如从6个增加到10个)，需要修改以下4处：
  *         1. key_buf数组大小：栏目数 * 5（例如10个栏目需要50字节）
@@ -1263,11 +1196,11 @@ void tuya_key_info_indicate()
 }
 ```
 
-## 没有上报调用，只在按键重置时有上报。导致APP按键不能计时更新
+## 没有上报调用，只在按键重置时有上报。导致APP按键不能及时更新
 
 统一上报接口：
 
-- 连接上APP时会上报一次。
+- **连接上APP时会上报一次。**
 
 - `apps\common\third_party_profile\tuya_protocol\app\demo\tuya_ble_app_demo.c`
 
@@ -1314,12 +1247,6 @@ void tuya_app_cb_handler(tuya_ble_cb_evt_param_t *event)
 }
 ```
 
-# 新增了按键自定义需要修改什么东西？
-
-## 从耳机按键触发到APP
-
-## 从涂鸦APP下发到耳机
-
 # BUG:单耳按键的上报与下发以及触发没有问题。但是双耳时三击与四击的按键自定义修改会丢失，维持老的按键设置
 
 ## 连接上APP主耳上传一次按键信息
@@ -1358,7 +1285,6 @@ void tuya_app_cb_handler(tuya_ble_cb_evt_param_t *event)
 [00:18:04.552]KEY消息映射成对应APP_MSG_XX并发送到MSG_FROM_APP
 [00:18:04.552]tuya_app_msg_handler event:0x63
 [00:18:04.553]TUYA_MUSIC_PREV
-
 ```
 
 - 瞬间变成99？明明元素是60？
@@ -1375,7 +1301,9 @@ void tuya_app_cb_handler(tuya_ble_cb_evt_param_t *event)
 [00:18:05.074]TUYA_MUSIC_VOL_DOWN
 ```
 
-- 这里缓存数组元素是61转换出来还是61？说明左耳的按键修改时，没有同步过来导致各执行各的。
+- **这里缓存数组元素是61转换出来还是61？说明左耳的按键修改时，没有同步过来导致各执行各的。**
+  - 增加了按键但是对应地方没有更改导致的。
+
 
 ### 按键修改时的同步问题
 
@@ -1422,27 +1350,100 @@ REGISTER_TWS_FUNC_STUB(app_tuya_state_stub) = {
     .func_id = TWS_FUNC_ID_TUYA_STATE,
     .func    = bt_tws_tuya_sync_info_received,
 };
+//这里是根据同步标志位来给另一个耳机做处理的，所以同步标志位很重要。
 static void bt_tws_tuya_sync_info_received(void *_data, u16 len, bool rx)
-    if (tuya_sync_info->key_change_flag == 1 || tuya_sync_info->key_reset == 1) {
+{
+    if (len < sizeof(struct TUYA_SYNC_INFO)) {
+        printf("tws receive len error!");
+        return;
+    }
+    static u16 find_device_timer = 0;
+    if (rx) {
+        struct TUYA_SYNC_INFO *tuya_sync_info = (struct TUYA_SYNC_INFO *)_data;
+        /* put_buf(tuya_sync_info, sizeof(tuya_sync_info)); */
+        printf("this is tuya received!\n");
+        if (tuya_sync_info->tuya_eq_flag == 1) {
+            printf("set remote eq_info!\n");
+            static char temp_eq_buf[10];
+            memset(temp_eq_buf, 0, sizeof(temp_eq_buf));
+            if (!memcmp(temp_eq_buf, tuya_sync_info->eq_info, 10)) {
+                tuya_eq_mode_post(EQ_MODE_NORMAL);
+            } else {
+                memcpy(temp_eq_buf, tuya_sync_info->eq_info, sizeof(temp_eq_buf));
+                tuya_eq_info_post(temp_eq_buf);
+            }
+            tuya_vm_info_post(tuya_sync_info->eq_info, TUYA_EQ_INFO_SYNC_VM, 11);
+        }
+
+        printf(">> volume:%d\n", tuya_sync_info->volume);
+        if (tuya_sync_info->volume_flag == 1) {
+            tuya_set_music_volume(tuya_sync_info->volume);
+        }
+
+        if (tuya_sync_info->key_change_flag == 1 || tuya_sync_info->key_reset == 1) {
             if (tuya_sync_info->key_change_flag == 1) {
                 tuya_sync_key_info(tuya_sync_info);
             }
             if (tuya_sync_info->key_reset == 1) {
                 tuya_reset_key_info();
             }
-            printf("%d %d %d %d %d %d\n", key_table_l[0], key_table_l[2], key_table_l[4], key_table_r[0], key_table_r[2], key_table_r[4]);
+            // 左耳所有7个按键值 (0-6)
+            printf("tuya_sync_info_Left ear keys[0-6]: 单击:%d 长按:%d 长按保持:%d 长按抬起:%d 双击:%d 三击:%d 四击:%d\n", 
+                key_table_l[0], key_table_l[1], key_table_l[2], key_table_l[3], 
+                key_table_l[4], key_table_l[5], key_table_l[6]);
+            // 右耳所有7个按键值 (0-6)  
+            printf("tuya_sync_info_Right ear keys[0-6]: 单击:%d 长按:%d 长按保持:%d 长按抬起:%d 双击:%d 三击:%d 四击:%d\n", 
+                key_table_r[0], key_table_r[1], key_table_r[2], key_table_r[3], 
+                key_table_r[4], key_table_r[5], key_table_r[6]);
             u8 key_value_record[2][7] = {0};
             tuya_update_vm_key_info(key_value_record);
             tuya_vm_info_post((char *)key_value_record, TUYA_KEY_SYNC_VM, sizeof(key_value_record));
         }
+        if (tuya_sync_info->find_device == 1) {
+            void tuya_find_device(u8 data);
+            tuya_find_device(1);
+        } else if (tuya_sync_info->find_device == 0) {
+            void tuya_find_device(u8 data);
+            tuya_find_device(0);
+        }
+        if (tuya_sync_info->device_conn_flag == 1) {
+            tuya_tone_post(get_tone_files()->bt_connect);
+        }
+        if (tuya_sync_info->phone_conn_flag == 1) {
+            tuya_tone_post(get_tone_files()->bt_connect);
+        }
+        if (tuya_sync_info->device_disconn_flag == 1) {
+            tuya_tone_post(get_tone_files()->bt_disconnect);
+        }
+        if (tuya_sync_info->phone_disconn_flag == 1) {
+            tuya_tone_post(get_tone_files()->bt_disconnect);
+        }
+        if (tuya_sync_info->tuya_bt_name_flag == 1) {
+            printf("sync bt_name:%s\n", tuya_sync_info->bt_name);
+            tuya_change_bt_name(tuya_sync_info->bt_name, LOCAL_NAME_LEN);
+            tuya_vm_info_post(tuya_sync_info->bt_name, TUYA_BT_NAME_SYNC_VM, LOCAL_NAME_LEN);
+        }
+    }
+}
+
+
 void tuya_sync_key_info(struct TUYA_SYNC_INFO *tuya_sync_info)
 {
     key_table_l[0] = tuya_sync_info->key_l1;
-    key_table_l[2] = tuya_sync_info->key_l2;
-    key_table_l[4] = tuya_sync_info->key_l3;
+    key_table_l[1] = tuya_sync_info->key_l5;
+    key_table_l[2] = tuya_sync_info->key_l6;
+    key_table_l[3] = tuya_sync_info->key_l7;
+    key_table_l[4] = tuya_sync_info->key_l2;
+    key_table_l[5] = tuya_sync_info->key_l3;
+    key_table_l[6] = tuya_sync_info->key_l4;
+
     key_table_r[0] = tuya_sync_info->key_r1;
-    key_table_r[2] = tuya_sync_info->key_r2;
-    key_table_r[4] = tuya_sync_info->key_r3;
+    key_table_r[1] = tuya_sync_info->key_r5;
+    key_table_r[2] = tuya_sync_info->key_r6;
+    key_table_r[3] = tuya_sync_info->key_r7;
+    key_table_r[4] = tuya_sync_info->key_r2;
+    key_table_r[5] = tuya_sync_info->key_r3;
+    key_table_r[6] = tuya_sync_info->key_r4;
 }
 
 //利用同步的信息更新自身缓存数组，主耳怎么设置的，这里就怎么还原
@@ -1462,7 +1463,7 @@ break;
 void tuya_sync_info_send(void *tuya_info, u8 data_type)
 {
 #if TCFG_USER_TWS_ENABLE
-    tuya_sync_flag_update_before_send(&tuya_sync_info);//更新双耳的标志位以及同步的按键信息
+    tuya_sync_flag_update_before_send(&tuya_sync_info);//先刷一遍目前的按键信息以及清空标志位，下面做标志位与按键的局部更新
     if (get_bt_tws_connect_status()) {
         printf("data_type:%d\n", data_type);
         switch (data_type) {
@@ -1508,10 +1509,9 @@ void tuya_sync_info_send(void *tuya_info, u8 data_type)
         //将同步状态信息发送给另一只耳机
         u8 status = tws_api_send_data_to_sibling(&tuya_sync_info, sizeof(tuya_sync_info), TWS_FUNC_ID_TUYA_STATE);
         printf("status:%d\n", status);
-/* } */
-                
+/* } */               
 
-//还原                
+//先刷一遍目前的按键信息以及清空标志位，下面做标志位与按键的局部更新               
 void tuya_sync_flag_update_before_send(struct TUYA_SYNC_INFO *tuya_sync_info)
 {
     tuya_sync_info->key_reset = 0;
@@ -1547,7 +1547,7 @@ void tuya_sync_flag_update_before_send(struct TUYA_SYNC_INFO *tuya_sync_info)
 
 ![image-20251226105549221](./涂鸦APP.assets/image-20251226105549221.png)
 
-单边触发两边相应。但是蓝牙协议的APP层处理对于某一些操作会只让主机处理。
+单边触发两边都相应处理。但是蓝牙协议的APP层处理对于某一些操作会只让主机处理。
 
 ```c
  /* 下面是蓝牙相关消息,从机不用处理  */
@@ -1601,6 +1601,8 @@ void tuya_battery_indicate(u8 left, u8 right, u8 chargebox)
 ```
 
 ## 上报入口添加对应的功能实现
+
+- 这里连接到APP时会上报一次
 
 ```c
 extern u8  get_self_battery_level(void);
@@ -1709,7 +1711,7 @@ void vbat_check(void *priv)
     tuya_vbat_cnt++;
     // 修改涂鸦电量更新速度，太快会导致涂鸦无法回连
     if(tuya_vbat_cnt >= 100){
-        //发送手机的等级？无法精准个位而且加1？岂不是100->91->81？为了里面的参数计算
+        //发送手机的等级？无法精准个位而且加1？岂不是100->91->81？是为了里面的参数计算
         tuya_battery_info_to_app_indicate(cur_battery_level + 1);
         tuya_vbat_cnt = 0;
     }
@@ -1811,7 +1813,7 @@ void find_device(void *priv)
 {
     u8 data = (u8)(uintptr_t)priv;  // 将void*转回u8
     tuya_set_vol_for_find_device(data);//放在这里，同步执行音量迅速同步，效果不错。之前感觉一边耳机声音小,似乎没有同步那么快。
-    //有状态同步，不需要TWS接口
+    //有状态同步机制，不需要TWS接口
     play_tone_file(get_tone_files()->find_ear);
 }
 void tuya_set_vol_for_find_device(u8 vol_flag)
@@ -1838,10 +1840,640 @@ void tuya_set_vol_for_find_device(u8 vol_flag)
 }
 ```
 
+# BUG:倒计时关机失败
+
+设置一分钟倒计时：
+
+```c
+[00:02:23.382][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:02:23.389]tuya_app_cb_handler, evt:0x43, task:app_core
+[00:02:23.390]tuya_data_parse, p_data:0x1050b0, len:8
+1F 02 00 04 00 00 00 01 
+[00:02:23.391]<--------------  tuya_data_parse  -------------->
+[00:02:23.392]get_sn = 2, id = 31, type = 2, data_len = 4, data:
+00 00 00 01 
+[00:02:23.393]tuya count down:1
+[00:02:23.394]tuya syscfg_write error = 0, please check
+S<>wS<>w
+[00:02:23.442][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:02:23.445]tuya_app_cb_handler, evt:0x51, task:app_core
+[00:02:23.446]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:11, type:0x0, mode:0x0, ack:0x0, status:0x0
+```
+
+一小时
+
+```c
+[00:03:47.532][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:03:47.538]tuya_app_cb_handler, evt:0x43, task:app_core
+[00:03:47.539]tuya_data_parse, p_data:0x1050b0, len:8
+1F 02 00 04 00 00 00 3C 
+[00:03:47.541]<--------------  tuya_data_parse  -------------->
+[00:03:47.541]get_sn = 3, id = 31, type = 2, data_len = 4, data:
+00 00 00 3C 
+[00:03:47.543]tuya count down:60
+[00:03:47.543]tuya syscfg_write error = 0, please check
+S<>wS<>w
+[00:03:47.592][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:03:47.595]tuya_app_cb_handler, evt:0x51, task:app_core
+[00:03:47.596]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:11, type:0x0, mode:0x0, ack:0x0, status:0x0
+```
+
+关闭倒计时
+
+```c
+[00:06:45.401][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:06:45.408]tuya_app_cb_handler, evt:0x43, task:app_core
+[00:06:45.409]tuya_data_parse, p_data:0x1050b0, len:8
+1F 02 00 04 00 00 00 00 
+[00:06:45.410]<--------------  tuya_data_parse  -------------->
+[00:06:45.411]get_sn = 5, id = 31, type = 2, data_len = 4, data:
+00 00 00 00 
+[00:06:45.412]tuya count down:0
+[00:06:45.413]tuya syscfg_write error = 0, please check
+S<>wS<>w
+[00:06:45.461][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:06:45.464]tuya_app_cb_handler, evt:0x51, task:app_core
+[00:06:45.465]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:11, type:0x0, mode:0x0, ack:0x0, status:0x0
+```
+
+实际处理
+
+```c
+    case DPID_SET_CLOCK:
+        //倒计时
+        u32 count_time = FOUR_BYTE_TO_DATA(data);
+        printf("tuya count down min:%d\n", count_time);//转换后是分钟
+        tuya_shut_down(count_time);
+        break;
+
+u8 tuya_auto_shut_down_timer = 0;
+void tuya_auto_shut_down_deal(void *priv)
+{
+    printf("__%s__  __%d__\n", __func__, __LINE__);
+    tws_sync_poweroff();//这里有单双耳关机的处理。
+}
+static void tuya_auto_shut_down_enable(u32 data)
+{
+    printf("tuya_auto_shut_down_enable\n");
+    if (tuya_auto_shut_down_timer == 0) {
+        tuya_auto_shut_down_timer = sys_timeout_add(NULL, tuya_auto_shut_down_deal, (data * 1000 * 60));
+    }
+
+}
+
+static void  tuya_auto_shut_down_disable(void)
+{
+    printf("tuya_auto_shut_down_disable\n");
+    if (tuya_auto_shut_down_timer) {
+        sys_timeout_del(tuya_auto_shut_down_timer);
+        tuya_auto_shut_down_timer = 0;
+    }
+
+}
+void tuya_shut_down(u32 data)
+{
+    if(data != 0){
+        tuya_auto_shut_down_enable(data);
+    }else{
+        tuya_auto_shut_down_disable();
+    }
+}
+```
+
+## 关机会导致失败而复位
+
+```c
+tws_sync_poweroff();//调用顶层接口
+sys_enter_soft_poweroff(POWEROFF_NORMAL);//最后会调用这个或者
+sys_enter_soft_poweroff(POWEROFF_NORMAL_TWS);
+//而这里面的关机流程：
+app_send_message(APP_MSG_POWER_OFF, reason);//会发一条消息到APP用于更新各状态，例如灯效之类的
+```
+
+之前RCSP调用这个没有问题：
+
+- `apps\common\third_party_profile\jieli\rcsp\rcsp_functions\rcsp_bt_manage.c`
+
+```c
+APP_MSG_HANDLER(rcsp_app_msg_entry) = {
+    .owner      = 0xff,
+    .from       = MSG_FROM_APP,
+    .handler    = rcsp_app_msg_handler,//APP层消息的回调处理函数
+};
+
+case APP_MSG_POWER_OFF://1
+        log_info("APP_MSG_POWER_OFF");
+        rcsp_bt_state_enter_soft_poweroff();
+        break;
+```
+
+对于涂鸦：
+
+```c
+APP_MSG_PROB_HANDLER(tuya_app_msg_entry) = {
+    .owner      = 0xff,
+    .from       = MSG_FROM_APP,
+    .handler    = tuya_app_msg_handler,
+};
+//也注册了APP层消息的回调处理
+    case APP_MSG_POWER_OFF:
+        //tuya_earphone_state_enter_soft_poweroff();
+        break;
+```
+
+- 估计消息到这里时，关机流程那边已经把BLE断开了，这里要更新状态向APP发送数据导致失败而重复发送最后复位。
+
+```c
+//内部调用了这个函数
+void tuya_bt_ble_exit(void)
+{
+    log_info("***** ble_exit******\n");
+
+    // BLE exit
+    if (app_ble_get_hdl_con_handle(tuya_ble_hdl)) {
+        app_ble_disconnect(tuya_ble_hdl);
+    }
+    app_ble_hdl_free(tuya_ble_hdl);
+    tuya_ble_hdl = NULL;
+}
+
+//RCSP调用了
+void bt_ble_exit(void)
+{
+    log_info("***** ble_exit******\n");
+    ble_module_enable(0);
+#if TEST_SEND_DATA_RATE
+    server_timer_stop();
+#endif
+
+}
+```
+
+## 推测tuya_app_msg_handler的作用
+
+```c
+int tuya_app_msg_handler(int *msg)
+{
+    u8 comm_addr[6];
+
+    int ret = false;  //默认不拦截消息
+    printf("\ntuya_app_msg_handler event:0x%x\n", msg[0]);
+    switch (msg[0]) {
+    case APP_MSG_BT_OPEN_PAGE_SCAN:
+        tuya_earphone_state_set_page_scan_enable();
+        break;
+    case APP_MSG_BT_CLOSE_PAGE_SCAN:
+        tuya_earphone_state_cancel_page_scan();
+        break;
+    case APP_MSG_BT_ENTER_SNIFF:
+        break;
+    case APP_MSG_BT_EXIT_SNIFF:
+        break;
+    case APP_MSG_TWS_PAIRED:
+        tuya_earphone_state_tws_init(1);
+        break;
+    case APP_MSG_TWS_UNPAIRED:
+        tuya_earphone_state_tws_init(0);
+        break;
+    case APP_MSG_TWS_PAIR_SUSS:
+        syscfg_read(CFG_TWS_COMMON_ADDR, comm_addr, 6);
+        tuya_earphone_state_tws_connected(1, comm_addr);
+        break;
+    case APP_MSG_TWS_CONNECTED:
+        tuya_earphone_state_tws_connected(0, comm_addr);
+        break;
+    case APP_MSG_POWER_OFF:
+        //tuya_earphone_state_enter_soft_poweroff();//关机流程中会发消息，执行到这里时，链路已经断开了，不断重发会导致复位。注释不知道是否有风险
+        break;
+    case APP_MSG_MUSIC_PP:
+        printf("TUYA_MUSIC_PP\n");
+        break;
+    case APP_MSG_MUSIC_NEXT:
+        printf("TUYA_MUSIC_NEXT\n");
+        break;
+    case APP_MSG_MUSIC_PREV:
+        printf("TUYA_MUSIC_PREV\n");
+        break;
+    case APP_MSG_VOL_UP:
+        printf("TUYA_MUSIC_VOL_UP\n");
+        tuya_volume_indicate(app_audio_get_volume(APP_AUDIO_CURRENT_STATE));
+        break;
+    case APP_MSG_VOL_DOWN:
+        printf("TUYA_MUSIC_VOL_DOWN\n");
+        tuya_volume_indicate(app_audio_get_volume(APP_AUDIO_CURRENT_STATE));
+        break;
+    case APP_MSG_ANC_SWITCH:
+        printf("APP_MSG_ANC_SWITCH\n");
+        tuya_volume_indicate(app_audio_get_volume(APP_AUDIO_CURRENT_STATE));
+    }
+    return ret;
+}
+```
+
+- 按键触发后也会走这里，根据实现来看应该是给APP同步状态的。比如耳机触发音量修改，那么音量需要同步到APP中。
+
+# BUG:更新蓝牙名后没有断开重新连接导致名称不更新
+
+```c
+void tuya_bt_name_deal(u8 *data, u16 data_len)
+{
+    char *name = malloc(data_len + 1);
+    memcpy(name, &data[0], data_len);
+    name[data_len] = '\0';
+    tuya_change_bt_name(name, LOCAL_NAME_LEN);
+    syscfg_write(CFG_BT_NAME, name, LOCAL_NAME_LEN);
+    tuya_sync_info_send(name, APP_TWS_TUYA_SYNC_BT_NAME);
+    printf("tuya bluetooth name: %s, len:%d\n", name, data_len);
+    free(name);
+    cpu_reset();//直接复位更新重新连接来更新名称
+}
+```
+
+- 体验丝滑。
+
+# BUG:补上关键的上报信息
+
+```c
+void tuya_info_indicate()
+{
+    tuya_info.eq_info.eq_onoff = 1;
+    tuya_eq_onoff_indicate(1);
+    if (bt_a2dp_get_status() == 1) {
+        tuya_play_status_indicate(1);
+    } else {
+        tuya_play_status_indicate(0);
+    }
+    tuya_conn_state_indicate();
+    tuya_bt_name_indicate();
+    //上报按键信息
+    tuya_key_info_to_app_indicate();
+    //上报电量信息
+    tuya_battery_info_to_app_indicate(get_self_battery_level() + 1);
+    //上报ANC的状态信息，这里直接获取耳机本地的比较好
+    tuya_anc_mode_indicate(anc_mode_get());
+    //上报游戏模式的状态
+    tuya_game_mode_indicate(bt_get_low_latency_mode());
+    //上报耳机音量信息，现成接口
+    tuya_volume_indicate(app_audio_get_volume(APP_AUDIO_CURRENT_STATE));
+    //上报保存的eq信息
+    tuya_eq_info_to_app_indicate();
+}
+
+extern u8 get_ota_status();
+void tuya_anc_mode_indicate(u8 sdk_anc_mode)
+{
+    u8 anc_value = 0;
+    
+    if(get_ota_status()){
+        return;
+    }
+    printf("tuya_anc_mode_indicate,sn:%d  tuya_anc_mode=%d", sn, sdk_anc_mode);
+    __anc_status_indicate_data p_dp_data;
+
+    p_dp_data.id = DPID_ANC_SWITCH_MODE;
+    p_dp_data.type = TUYA_SEND_DATA_TYPE_DT_ENUM;
+    p_dp_data.len = U16_TO_LITTLEENDIAN(1);
+    if(sdk_anc_mode == ANC_ON) {
+        anc_value = 0;
+    } else if (sdk_anc_mode == ANC_OFF) {
+        anc_value = 1;
+    } else if (sdk_anc_mode == ANC_TRANSPARENCY) {
+        anc_value = 2;
+    }
+    p_dp_data.data = anc_value;
+
+#if (TUYA_BLE_PROTOCOL_VERSION_HIGN == 0x03)
+    tuya_ble_dp_data_report(&p_dp_data, 5);
+#endif
+#if (TUYA_BLE_PROTOCOL_VERSION_HIGN == 0x04)
+    tuya_ble_dp_data_send(sn, DP_SEND_TYPE_ACTIVE, DP_SEND_FOR_CLOUD_PANEL, DP_SEND_WITH_RESPONSE, (uint8_t *)&p_dp_data, 5);
+    tuya_sn_increase();
+#endif
+}
+
+extern u8 get_ota_status();
+void tuya_game_mode_indicate(u8 status)
+{
+    if(get_ota_status()){
+        return;
+    }
+    printf("tuya_game_mode_indicate:%d, sn:%d", status, sn);
+    __game_status_indicate_data p_dp_data;
+
+    p_dp_data.id = DPID_GAME_MODE;
+    p_dp_data.type = TUYA_SEND_DATA_TYPE_DT_BOOL;
+    p_dp_data.len = U16_TO_LITTLEENDIAN(1);    
+    p_dp_data.data = status;
+
+#if (TUYA_BLE_PROTOCOL_VERSION_HIGN == 0x03)
+    tuya_ble_dp_data_report(&p_dp_data, 5);
+#endif
+#if (TUYA_BLE_PROTOCOL_VERSION_HIGN == 0x04)
+    tuya_ble_dp_data_send(sn, DP_SEND_TYPE_ACTIVE, DP_SEND_FOR_CLOUD_PANEL, DP_SEND_WITH_RESPONSE, (uint8_t *)&p_dp_data, 5);
+    tuya_sn_increase();
+#endif
+}
+
+void tuya_eq_info_to_app_indicate(){
+    char tem_eq_info[11] = {0};
+    syscfg_read(CFG_RCSP_ADV_EQ_DATA_SETTING, tem_eq_info, 11);
+    printf("tuya_eq_info_to_app_indicate\n");
+    put_buf((const u8 *)tem_eq_info, 11);
+    tuya_eq_info_indicate(tem_eq_info);
+}
+```
+
+# BUG:按键切换ANC后APP状态没有同步
+
+- 按键处理可以借鉴，按键触发时上报状态
+- **上报的如果是实时状态的话，还是将同步操作放到实际执行后不然状态有差别。**
+
+```c
+int tuya_app_msg_handler(int *msg)
+{
+    u8 comm_addr[6];
+
+    int ret = false;  //默认不拦截消息
+    printf("\ntuya_app_msg_handler event:0x%x\n", msg[0]);
+    switch (msg[0]) {
+    case APP_MSG_BT_OPEN_PAGE_SCAN:
+        tuya_earphone_state_set_page_scan_enable();
+        break;
+    case APP_MSG_BT_CLOSE_PAGE_SCAN:
+        tuya_earphone_state_cancel_page_scan();
+        break;
+    case APP_MSG_BT_ENTER_SNIFF:
+        break;
+    case APP_MSG_BT_EXIT_SNIFF:
+        break;
+    case APP_MSG_TWS_PAIRED:
+        tuya_earphone_state_tws_init(1);
+        break;
+    case APP_MSG_TWS_UNPAIRED:
+        tuya_earphone_state_tws_init(0);
+        break;
+    case APP_MSG_TWS_PAIR_SUSS:
+        syscfg_read(CFG_TWS_COMMON_ADDR, comm_addr, 6);
+        tuya_earphone_state_tws_connected(1, comm_addr);
+        break;
+    case APP_MSG_TWS_CONNECTED:
+        tuya_earphone_state_tws_connected(0, comm_addr);
+        break;
+    case APP_MSG_POWER_OFF:
+        //tuya_earphone_state_enter_soft_poweroff();//关机流程中会发消息，执行到这里时，链路已经断开了，不断重发会导致复位。注释不知道是否有风险
+        break;
+    case APP_MSG_MUSIC_PP:
+        printf("TUYA_MUSIC_PP\n");
+        break;
+    case APP_MSG_MUSIC_NEXT:
+        printf("TUYA_MUSIC_NEXT\n");
+        break;
+    case APP_MSG_MUSIC_PREV:
+        printf("TUYA_MUSIC_PREV\n");
+        break;
+    case APP_MSG_VOL_UP:
+        printf("TUYA_MUSIC_VOL_UP\n");
+        //避免顺序问题直接放到APP层去上报
+        //tuya_volume_indicate(app_audio_get_volume(APP_AUDIO_CURRENT_STATE));
+        break;
+    case APP_MSG_VOL_DOWN:
+        printf("TUYA_MUSIC_VOL_DOWN\n");
+        //避免顺序问题直接放到APP层去上报
+        //tuya_volume_indicate(app_audio_get_volume(APP_AUDIO_CURRENT_STATE));
+        break;
+    case APP_MSG_ANC_SWITCH:
+        printf("TUYA_MSG_ANC_SWITCH\n");
+        //避免顺序问题直接放到APP层去上报
+        //apps\earphone\mode\common\app_default_msg_handler.c
+        // void tuya_anc_mode_indicate(u8 tuya_anc_mode);
+        // tuya_anc_mode_indicate(anc_mode_get());
+        break;
+    case APP_MSG_LOW_LANTECY:
+        printf("TUYA_MSG_LOW_LANTECY\n");
+        //避免顺序问题直接放到APP层去上报
+        break;
+    }
+    return ret;
+}
+```
+
+# BUG:涂鸦按键流程没有通话部分
+
+- 参考默认流程写法
+
+```c
+void tuya_earphone_key_remap(int *value, int *msg)
+{
+    //struct key_event *key = (struct key_event *)msg;
+    //int index = key->event;//这个一直是0，不能用作映射了,直接根据按键事件类型的宏值来映射,根据enum key_action顺序来
+    int index = (int)msg[0];
+    g_printf("key_remap----key->event:%d----按键事件:%d----消息是否来自对耳:%d,----对耳消息宏值:%d\n", index, msg[0], msg[1], APP_KEY_MSG_FROM_TWS);
+    //针对通话做按键映射
+    *value = tuay_phone_key_remap(msg);
+    if((*value) != APP_MSG_NULL){
+        g_printf("tuay_phone_key_remap----return\n");//如果被通话映射了的话，就不需要继续了。已经拿到APP层消息了。
+        return;
+    }
+
+#if TCFG_USER_TWS_ENABLE
+    if (get_bt_tws_connect_status()) {
+        if (tws_api_get_local_channel() == 'R') {
+            if (msg[1] == APP_KEY_MSG_FROM_TWS) {
+                *value = key_table_l[index];
+                g_printf("*value%d<----key_table_l[%d]:%d\n", *value, index,key_table_l[index]);
+            } else {
+                *value = key_table_r[index];
+                g_printf("*value%d<----key_table_r[%d]:%d\n", *value, index,key_table_r[index]);
+            }
+        } else {
+            if (msg[1] == APP_KEY_MSG_FROM_TWS) {
+                *value = key_table_r[index];
+                g_printf("*value%d<----key_table_r[%d]:%d\n", *value, index,key_table_r[index]);
+            } else {
+                *value = key_table_l[index];
+                g_printf("*value%d<----key_table_l[%d]:%d\n", *value, index,key_table_r[index]);
+            }
+        }
+    } else
+#endif
+    {
+        *value = key_table_l[index];
+        g_printf("*value%d<----key_table_l[%d]:%d\n", *value, index,key_table_l[index]);
+    }
+}
+
+int tuay_phone_key_remap(int *msg){
+    char channel;
+    int app_msg = APP_MSG_NULL;
+    u8 key_action = (int)msg[0];;
+
+    void *devices[2];
+    void *active_device = NULL;
+    void *incoming_device = NULL;
+    void *outgoing_device = NULL;
+    void *siri_device = NULL;
+    //获取本地声道，只能用于配对方式选择了固定左右耳宏的?
+    channel = tws_api_get_local_channel();
+
+    int tws_state = tws_api_get_tws_state();
+    int num = btstack_get_conn_devices(devices, 2);
+    for (int i = 0; i < num; i++) {
+        int state = bt_get_phone_state(devices[i]);
+        if (state == BT_CALL_ACTIVE) {
+            active_device = devices[i];
+        } else if (state == BT_CALL_INCOMING) {
+            incoming_device = devices[i];
+        } else if (state == BT_CALL_OUTGOING || state == BT_CALL_ALERT) {
+            outgoing_device = devices[i];
+        } else if (state == BT_SIRI_STATE) {
+            siri_device = devices[i];
+        }
+    }
+    /* 通话相关场景下按键流程-------------------------------------------------------------------------------- */
+    if (active_device) {
+        //通话状态的通话场景
+        switch (key_action) {
+        case KEY_ACTION_CLICK:
+#if _THREE_CALL_EN
+        if(get_second_call_status() == BT_THREE_CALL_ACTIVE){
+            //当前正在和第一个号码通话中，没有来电
+            app_msg = _ACTIVE_DEVICE_KEY_ACTION_CLICKBT_BT_THREE_CALL_ACTIVE;
+            log_info("active_device-----KEY_ACTION_CLICK-----BT_THREE_CALL_ACTIVE-------------------------------------------------------   \n");
+            break;
+        }else if(get_second_call_status() == BT_THREE_CALL_INCOMING){
+            //当前正在和第一个号码通话中，第二个电话进来
+            app_msg = _ACTIVE_DEVICE_KEY_ACTION_CLICKBT_BT_THREE_CALL_INCOMING;
+            log_info("active_device-----KEY_ACTION_CLICK-----BT_THREE_CALL_INCOMING-------------------------------------------------------   \n");
+            break;
+        }else if(get_second_call_status() == BT_THREE_CALL_COMING){
+            //当前已经保留了一个电话，正在和另外一个手机通话
+            app_msg = _ACTIVE_DEVICE_KEY_ACTION_CLICKBT_BT_THREE_CALL_COMING;
+            log_info("active_device-----KEY_ACTION_CLICK-----BT_THREE_CALL_COMING-------------------------------------------------------   \n");
+            break;
+        }
+#endif
+            //先判断是否有三方通话再处理普通单击
+            app_msg = _ACTIVE_DEVICE_KEY_ACTION_CLICK;
+            break;
+
+        case KEY_ACTION_DOUBLE_CLICK:
+#if _TONE_KEY_ACTION_DOUBLE_CLICK_ACTIVE_DEVICE_ENABLE
+        tws_play_tone_file(get_tone_files()->_TONE_KEY_ACTION_DOUBLE_CLICK_ACTIVE_DEVICE_NAME,300);
+#elif _TONE_KEY_ACTION_DOUBLE_CLICK_ACTIVE_DEVICE_ALONE_ENABLE
+        tws_play_tone_file_alone(get_tone_files()->_TONE_KEY_ACTION_DOUBLE_CLICK_ACTIVE_DEVICE_NAME,300);
+#endif
+#if _THREE_CALL_EN
+            if(get_second_call_status() == BT_THREE_CALL_ACTIVE){
+                //当前正在和第一个号码通话中，没有来电
+                app_msg = _ACTIVE_DEVICE_KEY_ACTION_DOUBLE_CLICK_BT_THREE_CALL_ACTIVE;
+                log_info("active_device-----KEY_ACTION_DOUBLE_CLICK-----BT_THREE_CALL_ACTIVE-------------------------------------------------------   \n");
+                break;
+            }else if(get_second_call_status() == BT_THREE_CALL_INCOMING){
+                //当前正在和第一个号码通话中，第二个电话进来
+                app_msg = _ACTIVE_DEVICE_KEY_ACTION_DOUBLE_CLICK_BT_THREE_CALL_INCOMING;
+                log_info("active_device-----KEY_ACTION_DOUBLE_CLICK-----BT_THREE_CALL_INCOMING-------------------------------------------------------   \n");
+                break;
+            }else if(get_second_call_status() == BT_THREE_CALL_COMING){
+                //当前已经保留了一个电话，正在和另外一个手机通话
+                app_msg = _ACTIVE_DEVICE_KEY_ACTION_DOUBLE_CLICK_BT_THREE_CALL_COMING;
+                log_info("active_device-----KEY_ACTION_DOUBLE_CLICK-----BT_THREE_CALL_COMING-------------------------------------------------------   \n");
+                break;
+            }
+#endif
+            //先判断是否有三方通话再处理普通双击
+            app_msg = _ACTIVE_DEVICE_KEY_ACTION_DOUBLE_CLICK;
+            break;
+
+        case KEY_ACTION_LONG:
+#if _THREE_CALL_EN
+            if(get_second_call_status() == BT_THREE_CALL_ACTIVE){
+                //当前正在和第一个号码通话中，没有来电
+                app_msg = _ACTIVE_DEVICE_KEY_ACTION_LONG_BT_THREE_CALL_ACTIVE;
+                log_info("active_device-----KEY_ACTION_LONG-----BT_THREE_CALL_ACTIVE-------------------------------------------------------   \n");
+                break;
+            }else if(get_second_call_status() == BT_THREE_CALL_INCOMING){
+                //当前正在和第一个号码通话中，第二个电话进来
+                app_msg = _ACTIVE_DEVICE_KEY_ACTION_LONG_BT_THREE_CALL_INCOMING;
+                log_info("active_device-----KEY_ACTION_LONG-----BT_THREE_CALL_INCOMING-------------------------------------------------------   \n");
+                break;
+            }else if(get_second_call_status() == BT_THREE_CALL_COMING){
+                //当前已经保留了一个电话，正在和另外一个手机通话
+                app_msg = _ACTIVE_DEVICE_KEY_ACTION_LONG_BT_THREE_CALL_COMING;
+                log_info("active_device-----KEY_ACTION_LONG-----BT_THREE_CALL_COMING-------------------------------------------------------   \n");
+                break;
+            }
+#endif
+            //先判断是否有三方通话再处理普通长按
+            app_msg = _ACTIVE_DEVICE_KEY_ACTION_LONG;
+            break;
+
+        default:
+            break;
+        }
+    } else if (incoming_device) {
+        //通话状态的来电场景
+        switch (key_action) {
+        case KEY_ACTION_CLICK:
+#if _TONE_KEY_ACTION_CLICK_INCOMING_DEVICE_ENABLE
+                tws_play_tone_file(get_tone_files()->_TONE_KEY_ACTION_CLICK_INCOMING_DEVICE_NAME,300);
+#elif _TONE_KEY_ACTION_CLICK_INCOMING_DEVICE_ALONE_ENABLE
+                tws_play_tone_file_alone(get_tone_files()->_TONE_KEY_ACTION_CLICK_INCOMING_DEVICE_NAME,300);
+#endif
+            app_msg = _INCOMING_DEVICE_KEY_ACTION_CLICK;    
+            break;
+
+        case KEY_ACTION_DOUBLE_CLICK: 
+#if _TONE_KEY_ACTION_DOUBLE_CLICK_INCOMING_DEVICE_ENABLE
+                tws_play_tone_file(get_tone_files()->_TONE_KEY_ACTION_DOUBLE_CLICK_INCOMING_DEVICE_NAME,300);
+#elif _TONE_KEY_ACTION_DOUBLE_CLICK_INCOMING_DEVICE_ALONE_ENABLE
+                tws_play_tone_file_alone(get_tone_files()->_TONE_KEY_ACTION_DOUBLE_CLICK_INCOMING_DEVICE_NAME,300);
+#endif
+            app_msg = _INCOMING_DEVICE_KEY_ACTION_DOUBLE_CLICK;    
+            break;
+
+        case KEY_ACTION_TRIPLE_CLICK: 
+            app_msg = _INCOMING_DEVICE_KEY_ACTION_TRIPLE_CLICK;      
+            break;
+
+        case KEY_ACTION_LONG:  
+            app_msg = _INCOMING_DEVICE_KEY_ACTION_LONG;     
+            break;
+
+        default:
+            break;
+        }
+    } else if (outgoing_device) {
+        switch (key_action) {
+        case KEY_ACTION_CLICK:   
+            app_msg = _OUTGOING_DEVICE_KEY_ACTION_CLICK;       
+            break;
+
+        default:
+            break;
+        }
+    } else if (siri_device) {
+        switch (key_action) {
+        case KEY_ACTION_CLICK:
+            app_msg = _SIRI_DEVICE_KEY_ACTION_CLICK;    
+            break;
+        case KEY_ACTION_DOUBLE_CLICK:
+            //通话中的语音助手，比如小爱同学接听
+            app_msg = _SIRI_DEVICE_KEY_ACTION_DOUBLE_CLICK;       
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    return app_msg;
+}
+```
+
 # BUG
 
 - APP删除设备后很难弹窗
-- 单耳连接上，APP也显示双耳电量
 - 双耳连接，单耳入仓，APP会立马断开，后面会回连。
   - 似乎主耳入仓才会。
   - 后面再出仓，电量不更新，还是灰色。
+- 定时器关机触发后，再连接状态还是1分钟界面。不应该恢复原来的设置界面吗？
