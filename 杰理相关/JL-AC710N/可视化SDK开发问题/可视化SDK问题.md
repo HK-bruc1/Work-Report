@@ -2317,6 +2317,17 @@ if (get_bt_tws_connect_status())
 int tws_state = tws_api_get_tws_state();
 ```
 
+## 获取活跃设备的地址
+
+- `apps\common\third_party_profile\gfps_protocol\gfps_protocol.c`
+- `gfps_before_pair_new_device_in_task`
+
+```c
+想获取正在通话中的设备地址 → 用 esco_player_get_btaddr
+想获取正在播放音乐的设备地址 → 用 a2dp_player_get_btaddr
+想获取当前最活跃的设备地址（通话优先）→ 像代码中那样先调用 esco_player_get_btaddr，失败再调用 a2dp_player_get_btaddr
+```
+
 
 
 # 其他

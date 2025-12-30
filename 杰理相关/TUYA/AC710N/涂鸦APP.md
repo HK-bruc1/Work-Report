@@ -2470,10 +2470,319 @@ int tuay_phone_key_remap(int *msg){
 }
 ```
 
+# BUG:状态上报的函数位置
+
+- 公版是在自己的`tuya_app_msg_handler`上报，会有执行先后导致状态不一致的问题。
+- 第二种是在对应实际操作后上报，这种比较麻烦，那里操作那里就要写上报
+- 第三种直接到对应底层去上报，无论触发源来自那里，都会调用对应底层
+  - 特别是一拖二的情况优势明显。
+
+## 音量上报
+
+- ~~蓝牙相关的状态上报，发送对应消息时也会触发这里注册的回调函数~~
+  - ~~公版这里上报了连接状态，以及音乐播放状态，音量改变。~~
+    - ~~以及蓝牙协议的状态去更新更加准确，跟SDK的注册回调一起执行的。~~
+    - ~~**这里经过验证是<u>手机操控音量同步到APP</u>的。**，耳机按键操控音量不会更新！！！~~
+
+```c
+APP_MSG_HANDLER(tuya_btstack_msg_entry) = {
+    .owner      = 0xff,
+    .from       = MSG_FROM_BT_STACK,
+    .handler    = tuya_bt_status_event_handler,
+};
+static int tuya_bt_status_event_handler(int *msg)
+{
+    struct bt_event *bt = (struct bt_event *)msg;
+
+    printf("\ntuya_bt_status_event_handler event:0x%x\n", bt->event);
+    switch (bt->event) {
+    case BT_STATUS_SECOND_CONNECTED:
+    case BT_STATUS_FIRST_CONNECTED:
+        tuya_conn_state_set_and_indicate(1);
+        break;
+    case BT_STATUS_FIRST_DISCONNECT:
+    case BT_STATUS_SECOND_DISCONNECT:
+        tuya_conn_state_set_and_indicate(0);
+        break;
+    case BT_STATUS_AVRCP_VOL_CHANGE:
+        tuya_volume_indicate(bt->value * 16 / 127);//手机操作音量时，APP通过这里更新状态。等级可以一一对应。
+        break;
+    case BT_STATUS_A2DP_MEDIA_START:
+        tuya_play_status_indicate(bt_a2dp_get_status() == BT_MUSIC_STATUS_STARTING ? 1 : 0);
+        break;
+    case BT_STATUS_A2DP_MEDIA_STOP:
+        tuya_play_status_indicate(0);
+        break;
+    default:
+        break;
+    }
+    return 0;
+}
+```
+
+### 统一操作音量的上报位置
+
+- `tuya_app_msg_handler`摒弃这里的写法，因为有状态问题。
+- 摒弃在`apps\earphone\mode\bt\earphone.c`中对应case的写法，需要写两次。
+- 直接写在音量改变的底层函数中：`audio\common\audio_volume_mixer.c`
+  - 可以跟APP等级一一对应。
+  - **上述涂鸦音量就不要了，避免上报两次导致音量条跳动！**
+
+```c
+void app_audio_set_volume(u8 state, s16 volume, u8 fade)
+{
+    audio_app_volume_set(state, volume, fade);
+#if AUDIO_VBASS_LINK_VOLUME
+    if (state == APP_AUDIO_STATE_MUSIC) {
+        vbass_link_volume();
+    }
+#endif
+#if AUDIO_EQ_LINK_VOLUME
+    if (state == APP_AUDIO_STATE_MUSIC) {
+        eq_link_volume();
+    }
+#endif
+
+#if (THIRD_PARTY_PROTOCOLS_SEL & TUYA_DEMO_EN)
+    if(state != APP_AUDIO_STATE_WTONE){
+        extern void tuya_volume_indicate(s8 volume);
+        tuya_volume_indicate(volume);
+    }
+
+#endif
+}
+```
+
+
+
+## 游戏模式的上报
+
+- 写在这里不够优雅。。。
+
+```c
+    case APP_MSG_LOW_LANTECY:
+        if (bt_get_low_latency_mode() == 0) {
+            bt_enter_low_latency_mode();
+        } else {
+            bt_exit_low_latency_mode();
+        }
+#if (THIRD_PARTY_PROTOCOLS_SEL&TUYA_DEMO_EN)
+        void tuya_game_mode_indicate(u8 status);
+        tuya_game_mode_indicate(bt_get_low_latency_mode());
+#endif
+        break;
+```
+
+- `apps\earphone\mode\bt\low_latency.c`
+
+```c
+void bt_set_low_latency_mode(int enable, u8 tone_play_enable, int delay_ms)
+{
+    /*
+     * 未连接手机,操作无效
+     */
+    int state = tws_api_get_tws_state();
+    // if (state & TWS_STA_PHONE_DISCONNECTED) {
+    //     return;
+    // }
+    //这里改为conf配置，更加灵活，虽然未连接蓝牙，游戏模式没有意义，播放个提示音
+    //使用APP自然可以直接切换游戏模式
+
+    //不用默认的led游戏模式流程直接在这里更新灯效，APP与普通都可以
+    if(enable){
+        //游戏模式灯效
+        extern void update_game_led(void);
+        update_game_led();
+    }else {
+        //退出游戏模式灯效
+        extern void update_normal_led(void);
+        update_normal_led();
+    }
+
+    const char *fname = enable ? get_tone_files()->low_latency_in :
+                        get_tone_files()->low_latency_out;
+    g_printf("bt_set_low_latency_mode=%d\n", enable);
+#if TCFG_USER_TWS_ENABLE
+    if (state & TWS_STA_SIBLING_CONNECTED) {
+        if (delay_ms < 100) {
+            delay_ms = 100;
+        }
+        tws_play_tone_file_alone_callback(fname, delay_ms, 0x6F90E37B);
+    } else
+#endif
+    {
+        play_tone_file_alone(fname);
+        tws_api_low_latency_enable(enable);
+        a2dp_player_low_latency_enable(enable);
+    }
+    if (enable) {
+        if (bt_get_total_connect_dev()) {
+            lmp_hci_write_scan_enable(0);
+        }
+
+    } else {
+#if TCFG_USER_TWS_ENABLE
+        tws_dual_conn_state_handler();
+#endif
+    }
+
+#if (THIRD_PARTY_PROTOCOLS_SEL&TUYA_DEMO_EN)
+        void tuya_game_mode_indicate(u8 status);
+        tuya_game_mode_indicate(enable);
+#endif
+
+}
+```
+
+
+
+## 音乐播放状态上报
+
+- 公版都可以就是有一点慢，手机暂停，耳机暂停都可以。全局没有看到其他地方调用上报，只有连接时上报了一次。
+
+```c
+APP_MSG_HANDLER(tuya_btstack_msg_entry) = {
+    .owner      = 0xff,
+    .from       = MSG_FROM_BT_STACK,
+    .handler    = tuya_bt_status_event_handler,
+};
+static int tuya_bt_status_event_handler(int *msg)
+{
+    struct bt_event *bt = (struct bt_event *)msg;
+
+    printf("\ntuya_bt_status_event_handler event:0x%x\n", bt->event);
+    switch (bt->event) {
+    case BT_STATUS_SECOND_CONNECTED:
+    case BT_STATUS_FIRST_CONNECTED:
+        tuya_conn_state_set_and_indicate(1);
+        break;
+    case BT_STATUS_FIRST_DISCONNECT:
+    case BT_STATUS_SECOND_DISCONNECT:
+        tuya_conn_state_set_and_indicate(0);
+        break;
+    case BT_STATUS_AVRCP_VOL_CHANGE:
+        tuya_volume_indicate(bt->value * 16 / 127);//手机操作音量时，APP通过这里更新状态。等级可以一一对应。
+        break;
+    case BT_STATUS_A2DP_MEDIA_START:
+        tuya_play_status_indicate(bt_a2dp_get_status() == BT_MUSIC_STATUS_STARTING ? 1 : 0);
+        break;
+    case BT_STATUS_A2DP_MEDIA_STOP:
+        tuya_play_status_indicate(0);
+        break;
+    default:
+        break;
+    }
+    return 0;
+}
+```
+
+# BUG:添加六击隐藏按键映射并设置恢复出厂
+
+- [文档参考](https://www.kdocs.cn/l/cum5StN3CwWL?openfrom=docs)
+
+```c
+extern u8 get_ota_status();
+extern void tuya_game_mode_indicate(u8 status);
+extern void tuya_anc_mode_indicate(u8 sdk_anc_mode);
+void tuya_app_setting_info_reset(){
+    
+    tuya_ble_device_unbind();//解绑BLE 现成API
+    tuya_ble_device_factory_reset();//现成API
+
+    //重置按键
+    tuya_app_setting_info_key_reset();
+
+    //重置eq
+    extern __tuya_info tuya_info;
+    tuya_eq_info_reset(tuya_info,&(u8){1});
+
+    
+    //重置游戏模式 DPID指令处理没有写入VM
+    tuya_game_mode_indicate(0);
+    //重置ANC模式 ANC没有开启记忆。
+    tuya_anc_mode_indicate(1);
+
+
+    //蓝牙名
+    u8 name[LOCAL_NAME_LEN];
+    memset(name, 0x00, sizeof(name));
+    syscfg_read_string(CFG_BT_NAME, name, sizeof(name), 0);
+    syscfg_write(CFG_BT_NAME, name, LOCAL_NAME_LEN);
+}
+
+/**
+ * @brief 重置本地缓存按键以及上报重置按键
+ * 
+ */
+void tuya_app_setting_info_key_reset(){
+    printf("tuya_app_setting_info_key_reset\n");
+    u8 key_value_record[2][7] = {0};//初始化一个数组，记录按键值。两行7列，先左后右
+    tuya_reset_key_info();//重置缓存数组
+    for (int i = 0; i < 7; i++) {//赋值给临时数组并写入VM
+        key_value_record[0][i] = key_table_l[i];
+        key_value_record[1][i] = key_table_r[i];
+    }
+    syscfg_write(TUYA_SYNC_KEY_INFO, key_value_record, sizeof(key_value_record));
+    tuya_sync_info_send(NULL, APP_TWS_TUYA_SYNC_KEY_RESET);//对耳同步按键重置信息,将标志位置1
+    extern void tuya_key_reset_indicate();
+    tuya_key_reset_indicate();//上报APP按键列表流程
+}
+```
+
+# BUG:苹果接听电话后默认没有指向蓝牙音频
+
+```c
+static u8 user_phone_call = 0;
+void user_phone_deal_call_keep(){
+    printf("----user_phone_deal_call_keep");
+
+    u8 active_addr[6] = {0};
+    u8 esco_status = 0;
+    u8 a2dp_status = 0;
+    u8 hfp_status = BT_CALL_HANGUP;
+    u8 *bt_addr = NULL;
+
+    if (esco_player_get_btaddr(active_addr)) { //获取活跃地址，非可视化不需要调用
+        esco_status = esco_player_is_playing(btstack_get_device_mac_addr(active_addr));      //获取ESCO状态
+        a2dp_status = a2dp_player_is_playing(btstack_get_device_mac_addr(active_addr));      //获取a2dp状态
+        hfp_status = btstack_bt_get_call_status(active_addr);                                   //获取hfp状态
+        bt_addr = btstack_get_device_mac_addr(active_addr);                                  //获取活跃设备的蓝牙地址
+        printf("active:%p, esco:%d, a2dp:%d, hfp:%d", active_addr, esco_status, a2dp_status, hfp_status);
+        put_buf(bt_addr,6);
+    }
+
+     if(user_phone_call){
+        bt_cmd_prepare_for_addr(bt_addr,USER_CTRL_SCO_LINK,0,NULL);
+        user_phone_call = 0;
+     }
+}
+
+    case BT_STATUS_PHONE_INCOME:
+        log_info("BT_STATUS_PHONE_INCOME\n");
+
+        user_phone_call = 1;
+    case BT_STATUS_PHONE_HANGUP:
+        log_info("BT_STATUS_PHONE_HANGUP\n");
+
+        user_phone_call = 0;
+
+} else {
+    u8 bt_esco_play[6];
+    int ret = esco_player_get_btaddr(bt_esco_play);
+    if (ret && memcmp(bt_esco_play, bt->args, 6) != 0) {
+        //如果有地址在是用esco音频，但跟传出来的值地址不一致，就不更新了。
+        puts("<<<<<<<<<<<bt_esco_stop err,check addr\n");
+        break;
+    }
+
+    user_phone_deal_call_keep();
+```
+
 # BUG
 
 - APP删除设备后很难弹窗
 - 双耳连接，单耳入仓，APP会立马断开，后面会回连。
   - 似乎主耳入仓才会。
   - 后面再出仓，电量不更新，还是灰色。
+  - 主从切换断连是SDK问题。
 - 定时器关机触发后，再连接状态还是1分钟界面。不应该恢复原来的设置界面吗？
