@@ -693,7 +693,7 @@ const int config_audio_dac_noisefloor_optimize_enable = 0;
 #endif
 ```
 
-#### 老板SDK
+#### 老版SDK
 
 - patch08
 - `apps\earphone\log_config\lib_btctrler_config.c`
@@ -746,5 +746,26 @@ const int CONFIG_JL_DONGLE_PLAYBACK_LATENCY = 0; // dongle下行播放延时(mse
 #else
 #define AUDIO_GAME_EFFECT_CONFIG  0  //低延时游戏模式脚步声、枪声增强 1:使能、0：关闭
 #endif
+```
+
+## 精简makefile中的无关编译demo
+
+- 只留下目标芯片。
+
+```c
+.PHONY: all clean  ac710n_audio_adapter   clean_ac710n_audio_adapter 
+
+all:  ac710n_audio_adapter 
+	@echo +ALL DONE
+
+clean:  clean_ac710n_audio_adapter 
+	@echo +CLEAN DONE
+
+
+ac710n_audio_adapter:
+	$(MAKE) -C . -f Makefile.ac710n_audio_adapter
+
+clean_ac710n_audio_adapter:
+	$(MAKE) -C . -f Makefile.ac710n_audio_adapter clean
 ```
 
