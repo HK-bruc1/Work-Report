@@ -606,6 +606,10 @@ case KEY_ACTION_FIFTH_CLICK:
 
 - 先暂时手动实现，把宏关了。
 
+## 触摸按键的多击+长按实现
+
+
+
 # 恢复出厂设置
 
 ## 主从同步调用函数处理
@@ -3880,3 +3884,95 @@ static void anc_voice_effect_set(u8 *anc_setting, u8 mode, s16 value)
 #define RCSP_ADV_AI_NO_PICK										0		// 智能免摘
 #define RCSP_ADV_ASSISTED_HEARING								0		// 辅听，注意开启辅听后，需要关闭ANC相关功能
 ```
+
+# 进一步降低功耗
+
+- **后边所有主控带内置触摸的在充电以及满电状态全部关闭内置充电以节省功耗，出仓以后再重新打开内置触摸**
+- `cpu\components\touch\lp_touch_key_common.c`
+
+```c
+static int lp_touch_key_charge_msg_handler(int msg, int type)
+{
+    switch (msg) {
+    case CHARGE_EVENT_LDO5V_IN:
+        log_debug("CHARGE_EVENT_LDO5V_IN\n");
+    case CHARGE_EVENT_LDO5V_KEEP:
+        log_debug("CHARGE_EVENT_LDO5V_KEEP\n");
+        lp_touch_key_charge_mode_enter();
+        break;
+    case CHARGE_EVENT_CHARGE_FULL:
+        log_debug("CHARGE_EVENT_CHARGE_FULL\n");
+        lp_touch_key_charge_mode_enter();//满电关触摸
+        break;
+    case CHARGE_EVENT_LDO5V_OFF:
+        log_debug("CHARGE_EVENT_LDO5V_OFF\n");
+        lp_touch_key_charge_mode_exit();
+        break;
+    }
+    return 0;
+}
+APP_CHARGE_HANDLER(lp_touch_key_charge_msg_entry, 0) = {
+    .handler = lp_touch_key_charge_msg_handler,
+};
+
+充满电
+[00:00:00.346][CHARGE]constant_current_progi_volt_config, 233, cur_vbat: 4020 mV
+S<>S<>S<>S<>S<>S<>S<>S<>S<>
+[00:00:09.247][APP_CHARGE]charge_full_deal
+[00:00:09.248][CHARGE]charge_close
+[00:00:09.248][LP_KEY]CHARGE_EVENT_CHARGE_FULL
+[00:00:09.249][LP_KEY]lp_touch_key_charge_mode_enter //关闭触摸
+[00:00:09.249][LP_KEY]lpctmu disable
+[00:00:09.250][APP_CHARGE]charge_close_deal
+[00:00:09.250][APP_CHARGE]batmgr_send_msg(BAT_MSG_CHARGE_CLOSE, 0);
+[00:00:09.251][PWM_LED]led_name = 0, disp_mode = 0x2
+[00:00:09.252][LED_UI]MSG_FROM_BATTERY----ui_battery_msg_handler----BAT_MSG_CHARGE_CLOSES<>***S<>*S<>**S<>*S<>**S<>*S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>S<>
+[00:00:19.250][PMU]=============power_set_soft_poweroff============
+[00:00:19.251][PMU]sf_keep_lpctmu: 0
+[00:00:19.251][PMU]sf_keep_pvdd: 0
+[00:00:19.251][PMU]sf_keep_nvdd: 0
+[00:00:19.252][PMU]sf_vddio_keep: 1
+[00:00:19.252][PMU]keep_lrc: 0
+[00:00:19.253][PMU]sfc_bit_mode: 2, port: 0
+
+充电
+[00:00:00.242][LP_KEY]CHARGE_EVENT_LDO5V_IN
+[00:00:00.243][LP_KEY]CHARGE_EVENT_LDO5V_KEEP
+[00:00:00.243][LP_KEY]ch:4 res:5563 cur:2 net:1
+[00:00:00.244][LP_KEY]lp_touch_key_charge_mode_enter //关闭触摸
+[00:00:00.245][LP_KEY]lpctmu disable
+[00:00:00.245][CHARGE]charge_start
+[00:00:00.246][APP_CHARGE]set wdt to 32s!
+[00:00:00.246]tuya_battery_info_to_app_indicate:cur_battery_level=9 data=255 chargestore=100 local_charge_bit=128
+[00:00:00.248][APP_CHARGE]charge_start_deal
+[00:00:00.248][APP_CHARGE]batmgr_send_msg(BAT_MSG_CHARGE_START, 0);
+[00:00:00.249][PWM_LED]led_name = 3, disp_mode = 0x2
+[00:00:00.250][LED_UI]MSG_FROM_BATTERY----ui_battery_msg_handler----BAT_MSG_CHARGE_START
+[00:00:00.268]tuya_battery_info_to_app_indicate:cur_battery_level=9 data=255 chargestore=100 local_charge_bit=128
+S<>
+[00:00:00.346][CHARGE]constant_current_progi_volt_config, 233, cur_vbat: 4020 mV    
+    
+出仓 >S<>S<>R*******************************************************************************************************************************************************************
+[00:01:29.304][APP_CHARGE]charge_ldo5v_off_deal
+[00:01:29.305][CHARGE]charge_close
+[00:01:29.306][APP_CHARGE]batmgr_send_msg(BAT_MSG_CHARGE_LDO5V_OFF, 0);
+[00:01:29.306][APP_CHARGE]set wdt to 4s!
+[00:01:29.307][APP_CHARGE]ldo5v off,task switch to BT
+[00:01:29.308]anc_resume
+[00:01:29.308][LP_KEY]CHARGE_EVENT_LDO5V_OFF
+[00:01:29.309][LP_KEY]lp_touch_key_charge_mode_exit//打开触摸
+[00:01:29.309][LP_KEY]lp_touch_key_identify_algo_reset
+[00:01:29.310][LP_KEY]lpctmu enable
+```
+
+# 芯片flash大小
+
+```c
+Device online
+Chip Version  : C
+Flash ID      : 856015
+Flash Capacity: 2M
+Flash UUID    : 42 50 32 34 39 38 32 14 00 58 47 44 47 03 D5 78
+```
+
+- 8的倍数。

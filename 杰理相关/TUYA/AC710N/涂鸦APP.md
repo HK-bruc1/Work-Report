@@ -2778,6 +2778,10 @@ void user_phone_deal_call_keep(){
     user_phone_deal_call_keep();
 ```
 
+# 后续连不上涂鸦APP
+
+- 不知道是不是后台设定了还是啥。需要烧录带认证码的固件才能连接上。
+
 # BUG
 
 - APP删除设备后很难弹窗
@@ -2786,3 +2790,6 @@ void user_phone_deal_call_keep(){
   - 后面再出仓，电量不更新，还是灰色。
   - 主从切换断连是SDK问题。
 - 定时器关机触发后，再连接状态还是1分钟界面。不应该恢复原来的设置界面吗？
+
+# 生产模式
+
