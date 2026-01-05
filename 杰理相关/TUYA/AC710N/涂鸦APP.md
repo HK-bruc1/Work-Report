@@ -2778,9 +2778,76 @@ void user_phone_deal_call_keep(){
     user_phone_deal_call_keep();
 ```
 
-# 后续连不上涂鸦APP
+# BUG:音乐eq失效
+
+临时方案：
+
+# 测试模式与生产模式
+
+## 后续连不上涂鸦APP
 
 - 不知道是不是后台设定了还是啥。需要烧录带认证码的固件才能连接上。
+
+`apps\common\third_party_profile\tuya_protocol\app\demo\tuya_ble_app_demo.c`
+
+```c
+#define TUYA_INFO_TEST 1
+
+#if TUYA_INFO_TEST
+static const char device_id_test[DEVICE_ID_LEN] = "tuya52c534229871";
+static const char auth_key_test[AUTH_KEY_LEN] = "gqGPQQl4n540dc6sVPoGoh4fO7a8DzED";
+static const uint8_t mac_test[6] = {0xDC, 0x23, 0x4E, 0x3E, 0xBD, 0x3D}; //The actual MAC address is : 66:55:44:33:22:11
+#endif /* TUYA_INFO_TEST */
+```
+
+- 打开就是调试模式，关闭就是生产模式需要认证码
+
+`apps\earphone\include\user_cfg_id.h (a6f7d7a)`
+
+```c
+#define     CFG_FMY_INFO                     182
+
+#define     VM_TUYA_TRIPLE                   183//定义一个ID
+```
+
+`cpu\br56\tools\isd_config_rule.c`
+
+```c
+[SYS_CFG_PARAM]
+SPI = CAT4(CONFIG_SPI_DATA_WIDTH, CONFIG_SPI_CLK_DIV, CONFIG_SPI_MODE, CONFIG_SPI_PORT);	//width_clk_mode_port;
+
+//是否支持认证码 0:不支持 1:支持 一拖八出现认证码选项
+AUTH_CODE=1
+```
+
+
+
+## 一拖八导入认证码
+
+1. 先固件授权
+2. 部署到一拖八（认证码选项需要代码开启）
+   - 首次不需要勾选强制更新认证码相当于”空片“，换认证码时才勾选。
+   - 这个认证码是存在VM中的，需要测试更新固件时，选择擦除VM是否影响到认证码。
+   - 认证码的CSV需要工具去转换，手动修改的不行。原始csv需要英文逗号隔开。
+     - 认证码跟PID是对应的。不能混乱。
+     - 估计是基于PID创建的认证码，统一烧录左边板子。
+     - 这个相当于KEY了，空片写进入不会被擦除。但是KEY不一样烧录不进去。但是这里一拖八有强制更新认证码的选项，可以更改认证码。
+
+![image-20260105151451897](./涂鸦APP.assets/image-20260105151451897.png)
+
+## 验证
+
+- 可以通过MAC地址识别出有没有烧录成功。
+
+![image-20260105160615207](./涂鸦APP.assets/image-20260105160615207.png)
+
+日志中显示的十六进制数据与认证码中的三个部分完全对应：
+
+- device_id的十六进制 → uuid0e7a4534c509
+- auth_key的十六进制 → iBAoTAiKzNj8rhoVQktvqhjT0AJzhw5G
+- mac的十六进制 → DC2353044551
+
+最终用逗号连接成认证码字符串。这是标准的**十六进制到ASCII/字符串**的一一映射关系。
 
 # BUG
 
@@ -2789,7 +2856,6 @@ void user_phone_deal_call_keep(){
   - 似乎主耳入仓才会。
   - 后面再出仓，电量不更新，还是灰色。
   - 主从切换断连是SDK问题。
+  - **公版不能主从切换**
 - 定时器关机触发后，再连接状态还是1分钟界面。不应该恢复原来的设置界面吗？
-
-# 生产模式
 
