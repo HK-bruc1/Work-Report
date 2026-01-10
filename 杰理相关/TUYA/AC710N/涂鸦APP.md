@@ -2324,6 +2324,7 @@ void tuya_earphone_key_remap(int *value, int *msg)
     int index = (int)msg[0];
     g_printf("key_remap----key->event:%d----按键事件:%d----消息是否来自对耳:%d,----对耳消息宏值:%d\n", index, msg[0], msg[1], APP_KEY_MSG_FROM_TWS);
     //针对通话做按键映射
+    //针对APP显示栏外写死的按键功能映射，比如六击恢复出厂设置。不会显示在APP按键界面上的。
     *value = tuay_phone_key_remap(msg);
     if((*value) != APP_MSG_NULL){
         g_printf("tuay_phone_key_remap----return\n");//如果被通话映射了的话，就不需要继续了。已经拿到APP层消息了。
@@ -2515,10 +2516,22 @@ int tuay_phone_key_remap(int *msg){
             //通话中的语音助手，比如小爱同学接听
             app_msg = _SIRI_DEVICE_KEY_ACTION_DOUBLE_CLICK;       
             break;
-
         default:
             break;
         }
+    }
+
+    //除了通话外需要映射额外的写死的按键
+    switch (key_action)
+    {
+    case KEY_ACTION_SEXTUPLE_CLICK:
+        app_msg = _TUYA_HIDE_KEY_ACTION_SEXTUPLE_CLICK;
+        break;
+    case KEY_ACTION_HOLD_3SEC:
+        app_msg = _TUYA_HIDE_KEY_ACTION_HOLD_3SEC;
+        break;
+    default:
+        break;
     }
 
     return app_msg;
@@ -2768,6 +2781,11 @@ void tuya_app_setting_info_reset(){
     memset(name, 0x00, sizeof(name));
     syscfg_read_string(CFG_BT_NAME, name, sizeof(name), 0);
     syscfg_write(CFG_BT_NAME, name, LOCAL_NAME_LEN);
+
+    //断开BLE 使APP断开更加快速，不然会慢很多
+    if(tws_api_get_role() == TWS_ROLE_MASTER){
+        tuya_ble_gap_disconnect();
+    }
 }
 
 /**
@@ -3004,6 +3022,91 @@ void set_triple_info(u8 *data)
         printf("Tuya triple data write failed!!!");
     }
 }
+```
+
+# BUG:加快APP断开速度
+
+调用
+
+- `tuya_app_setting_info_reset`
+- `tuya_earphone_state_enter_soft_poweroff`
+
+```c
+//断开BLE 使APP断开更加快速，不然会慢很多
+    if(tws_api_get_role() == TWS_ROLE_MASTER){
+        tuya_ble_gap_disconnect();
+    }
+```
+
+# BUG:APP播放暂停不同步
+
+- 添加定时器进行校准
+- 手机A2DP状态改变后，发送多次保证。避免手机暂停音乐后快速点击APP中的播放导致状态不同步。
+
+```c
+u16 tuya_play_status_indicate_repeat_timer_id = 0;
+u8 tuya_play_status_indicate_repeat_timer_cnt = 0;
+void tuya_play_status_indicate_repeat_timer(void *priv){
+
+    printf("tuya_play_status_indicate_repeat_timer\n");
+    tuya_play_status_indicate(bt_a2dp_get_status() == BT_MUSIC_STATUS_STARTING ? 1 : 0);
+
+    tuya_play_status_indicate_repeat_timer_cnt++;
+
+    if(tuya_play_status_indicate_repeat_timer_cnt > 10){
+        sys_timer_del(tuya_play_status_indicate_repeat_timer_id);
+        tuya_play_status_indicate_repeat_timer_id = 0;
+        tuya_play_status_indicate_repeat_timer_cnt = 0;
+    }
+}
+
+void tuya_play_status_indicate_calibration(){
+        if(tuya_play_status_indicate_repeat_timer_id != 0){
+            sys_timer_del(tuya_play_status_indicate_repeat_timer_id);
+            tuya_play_status_indicate_repeat_timer_id = 0;
+            tuya_play_status_indicate_repeat_timer_cnt = 0;
+        }
+        tuya_play_status_indicate_repeat_timer_id = sys_timer_add(NULL, tuya_play_status_indicate_repeat_timer, 500);
+}
+static int tuya_bt_status_event_handler(int *msg)
+{
+    struct bt_event *bt = (struct bt_event *)msg;
+
+    printf("tuya_bt_status_event_handler event:0x%x\n", bt->event);
+    switch (bt->event) {
+    case BT_STATUS_SECOND_CONNECTED:
+    case BT_STATUS_FIRST_CONNECTED:
+        tuya_conn_state_set_and_indicate(1);
+        break;
+    case BT_STATUS_FIRST_DISCONNECT:
+    case BT_STATUS_SECOND_DISCONNECT:
+        tuya_conn_state_set_and_indicate(0);
+        break;
+    case BT_STATUS_AVRCP_VOL_CHANGE:
+        //tuya_volume_indicate(bt->value * 16 / 127);底层函数中有了，避免多次上报导致音量条跳动。
+        break;
+    case BT_STATUS_A2DP_MEDIA_START: 
+        tuya_play_status_indicate_calibration();
+        break;
+    case BT_STATUS_A2DP_MEDIA_STOP:
+        tuya_play_status_indicate_calibration();
+        break;
+    default:
+        break;
+    }
+    return 0;
+}    
+
+//APP自己的DPID指令处理也上报，防止手机暂停后，还没发送状态同步时，APP快速点击开始导致打断了上报而状态不一致。
+//这里上报还可以保证APP指令同步，比如没有手机事先放音乐的话，APP发送指令是没有效果的，但是图标已经变了，通过这种方式可以校准图标。
+case DPID_MUSIC_PP:
+        //播放/暂停
+        printf("tuya play state:%d\n", data[0]);
+        /* tuya_post_key_event(TUYA_MUSIC_PP); */
+        bt_cmd_prepare(USER_CTRL_AVCTP_OPID_PLAY, 0, NULL);
+        extern void tuya_play_status_indicate_calibration();
+        tuya_play_status_indicate_calibration();
+        break;
 ```
 
 # BUG
