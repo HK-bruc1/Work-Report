@@ -1587,10 +1587,15 @@ int bt_key_power_msg_remap(int *msg)
 公版实现：`apps\common\third_party_profile\tuya_protocol\app\demo\tuya_ble_app_demo.c`
 
 ```c
-//统一电量上报接口
+//统一电量上报函数
 void tuya_battery_indicate(u8 left, u8 right, u8 chargebox)
 {
     //tuya_led_state_indicate();
+    if(left == 0xff){//优化非TWS时单边上报
+        left = 0;
+    }else if(right == 0xff){
+        right = 0;
+    }
     tuya_info.battery_info.left_battery = left;
     tuya_info.battery_info.right_battery = right;
     tuya_info.battery_info.case_battery = chargebox;
@@ -1727,6 +1732,56 @@ void vbat_check(void *priv)
     if (vbat_fast_timer == 0) {
         vbat_fast_timer = usr_timer_add(NULL, vbat_check, VBAT_DETECT_TIME, 1);
     }    
+```
+
+## 单耳入仓出仓回连电量无法更新
+
+- TWS连接以及断开时增加一次电量上报，依旧无法解决主从切换问题：主机断开APP就直接断开了。
+- 在专属回调中上报
+
+```c
+extern u8  get_self_battery_level(void);
+int tuya_bt_tws_event_handler(int *msg)
+{
+    struct tws_event *bt = (struct tws_event *)msg;
+    int role = bt->args[0];
+    int phone_link_connection = bt->args[1];
+    int reason = bt->args[2];
+
+    printf("\ntuya_bt_tws_event_handler event:0x%x\n", bt->event);
+    switch (bt->event) {
+    case TWS_EVENT_CONNECTED:
+        if (tws_api_get_role() == TWS_ROLE_SLAVE) {
+            //master enable
+            printf("tuya_ble_app_disconnect----tuya_set_adv_disable----Tws Connect Slave!!!\n");
+            /*从机ble关掉*/
+            tuya_ble_app_disconnect();
+            tuya_set_adv_disable();
+        } /*else {
+            printf("master send\n");
+            master_send_triple_info_to_slave();
+        }*/
+        if(tws_api_get_local_channel() == 'L'){
+            printf("left send send_triple_info\n");//认证码烧录的是左边。
+            master_send_triple_info_to_slave();
+        }
+        tuya_tws_bind_info_sync();
+        //上报电量信息
+        tuya_battery_info_to_app_indicate(get_self_battery_level() + 1);
+
+        break;
+//...
+    case TWS_EVENT_CONNECTION_DETACH:
+        /*
+         * TWS连接断开
+         */
+        if (app_var.goto_poweroff_flag) {
+            break;
+        }
+        tuya_set_adv_enable();
+        //上报电量信息
+        tuya_battery_info_to_app_indicate(get_self_battery_level() + 1);
+        break;
 ```
 
 # BUG:发送降噪模式指令失效
@@ -2269,6 +2324,7 @@ void tuya_earphone_key_remap(int *value, int *msg)
     int index = (int)msg[0];
     g_printf("key_remap----key->event:%d----按键事件:%d----消息是否来自对耳:%d,----对耳消息宏值:%d\n", index, msg[0], msg[1], APP_KEY_MSG_FROM_TWS);
     //针对通话做按键映射
+    //针对APP显示栏外写死的按键功能映射，比如六击恢复出厂设置。不会显示在APP按键界面上的。
     *value = tuay_phone_key_remap(msg);
     if((*value) != APP_MSG_NULL){
         g_printf("tuay_phone_key_remap----return\n");//如果被通话映射了的话，就不需要继续了。已经拿到APP层消息了。
@@ -2460,10 +2516,22 @@ int tuay_phone_key_remap(int *msg){
             //通话中的语音助手，比如小爱同学接听
             app_msg = _SIRI_DEVICE_KEY_ACTION_DOUBLE_CLICK;       
             break;
-
         default:
             break;
         }
+    }
+
+    //除了通话外需要映射额外的写死的按键
+    switch (key_action)
+    {
+    case KEY_ACTION_SEXTUPLE_CLICK:
+        app_msg = _TUYA_HIDE_KEY_ACTION_SEXTUPLE_CLICK;
+        break;
+    case KEY_ACTION_HOLD_3SEC:
+        app_msg = _TUYA_HIDE_KEY_ACTION_HOLD_3SEC;
+        break;
+    default:
+        break;
     }
 
     return app_msg;
@@ -2676,6 +2744,11 @@ static int tuya_bt_status_event_handler(int *msg)
 }
 ```
 
+- 其他地方也是通过`BT_STATUS_A2DP_MEDIA_START`zu做处理的。在优先级高的消息回调中上报是否可以增加速度，这个是上报状态的，可以多处调用
+  - `apps\earphone\mode\bt\dual_a2dp_play.c`
+  - `apps\earphone\mode\bt\a2dp_play.c`
+  - 都是基于消息case处理，效果不明显。
+
 # BUG:添加六击隐藏按键映射并设置恢复出厂
 
 - [文档参考](https://www.kdocs.cn/l/cum5StN3CwWL?openfrom=docs)
@@ -2708,6 +2781,11 @@ void tuya_app_setting_info_reset(){
     memset(name, 0x00, sizeof(name));
     syscfg_read_string(CFG_BT_NAME, name, sizeof(name), 0);
     syscfg_write(CFG_BT_NAME, name, LOCAL_NAME_LEN);
+
+    //断开BLE 使APP断开更加快速，不然会慢很多
+    if(tws_api_get_role() == TWS_ROLE_MASTER){
+        tuya_ble_gap_disconnect();
+    }
 }
 
 /**
@@ -2782,6 +2860,26 @@ void user_phone_deal_call_keep(){
 
 临时方案：
 
+- 修改normal数组
+
+- `audio\effect\eq_config.c`
+
+```c
+#if (THIRD_PARTY_PROTOCOLS_SEL&TUYA_DEMO_EN)
+const struct eq_seg_info eq_tab_normal[] = {
+    {0, _EQ_IIR_TYPE_0, _FREQ_0, _GAIN_0, _Q_0},
+    {1, _EQ_IIR_TYPE_1, _FREQ_1, _GAIN_1, _Q_1},
+    {2, _EQ_IIR_TYPE_2, _FREQ_2, _GAIN_2, _Q_2},
+    {3, _EQ_IIR_TYPE_3, _FREQ_3, _GAIN_3, _Q_3},
+    {4, _EQ_IIR_TYPE_4, _FREQ_4, _GAIN_4, _Q_4},
+    {5, _EQ_IIR_TYPE_5, _FREQ_5, _GAIN_5, _Q_5},
+    {6, _EQ_IIR_TYPE_6, _FREQ_6, _GAIN_6, _Q_6},
+    {7, _EQ_IIR_TYPE_7, _FREQ_7, _GAIN_7, _Q_7},
+    {8, _EQ_IIR_TYPE_8, _FREQ_8, _GAIN_8, _Q_8},
+    {9, _EQ_IIR_TYPE_9, _FREQ_9, _GAIN_9, _Q_9},
+};
+```
+
 # 测试模式与生产模式
 
 ## 后续连不上涂鸦APP
@@ -2807,7 +2905,7 @@ static const uint8_t mac_test[6] = {0xDC, 0x23, 0x4E, 0x3E, 0xBD, 0x3D}; //The a
 ```c
 #define     CFG_FMY_INFO                     182
 
-#define     VM_TUYA_TRIPLE                   183//定义一个ID
+#define     VM_TUYA_TRIPLE                   183//定义一个ID   公版缺失
 ```
 
 `cpu\br56\tools\isd_config_rule.c`
@@ -2849,9 +2947,170 @@ AUTH_CODE=1
 
 最终用逗号连接成认证码字符串。这是标准的**十六进制到ASCII/字符串**的一一映射关系。
 
+# BUG:APP删除设备无法再次连接
+
+- APP内主界面删除是无效的，不会发送解除绑定的指令。需要去设备中找到解除设备的按钮。
+  - 解除绑定需要双方保持连接，APP发送解除设备指令才能收到，否则指令失效
+  - 耳机单方面解除也可以（需要实现）。
+
+# BUG:三元组数组无法同步
+
+引发的问题：
+
+1. **只有左边出仓可以立马搜索到，另一边不行。**
+2. **即使先左边出仓连接到APP了，在通过TWS状态同步实现正常显示。但是双耳入仓在出仓，当右边回归到主机角色时，三元组信息无法同步，还是导致搜索不到即回连APP失败。**
+
+同步三元组时不要分主从，而是分左右
+
+- 如果主机是右边的话，同步无法完成就会搜索不到设备
+
+```c
+int tuya_bt_tws_event_handler(int *msg)
+{
+    struct tws_event *bt = (struct tws_event *)msg;
+    int role = bt->args[0];
+    int phone_link_connection = bt->args[1];
+    int reason = bt->args[2];
+
+    printf("\ntuya_bt_tws_event_handler event:0x%x\n", bt->event);
+    switch (bt->event) {
+    case TWS_EVENT_CONNECTED:
+        if (tws_api_get_role() == TWS_ROLE_SLAVE) {
+            //master enable
+            printf("tuya_ble_app_disconnect----tuya_set_adv_disable----Tws Connect Slave!!!\n");
+            /*从机ble关掉*/
+            tuya_ble_app_disconnect();
+            tuya_set_adv_disable();
+        } /*else {
+            printf("master send\n");
+            master_send_triple_info_to_slave();
+        }*/
+        if(tws_api_get_local_channel() == 'L'){
+            printf("left send send_triple_info\n");//认证码烧录的是左边。
+            master_send_triple_info_to_slave();
+        }
+        tuya_tws_bind_info_sync();
+
+        break;
+```
+
+
+
+## BUG:首次配对连接搜索不到设备，需要左边单独出仓（烧录认证码）
+
+三元组信息另一边同步后没有存入VM导致另一边出仓时广播时的认证码异常导致搜索不到。
+
+### 另一边接收后认证码后直接写入VM
+
+- 可以实现回连。
+
+```c
+void set_triple_info(u8 *data)
+{
+    u8 vm_write_result = 0;
+    printf("--------------------------------------------");
+    printf("Tuya triple function is no available now!!!");
+    printf("--------------------------------------------");
+    memset((u8 *)&tuya_data, 0, 0x3e);
+    memcpy((u8 *)&tuya_data, data, TUYA_TRIPLE_LENGTH - 2);
+    //tws_conn_send_event(TWS_EVENT_CHANGE_TRIPLE, "111", 0, 1, 0);
+    vm_write_result = syscfg_write(VM_TUYA_TRIPLE, (u8 *)&tuya_data, TUYA_TRIPLE_LENGTH);
+    memcpy((u8 *)&triple_info.data, (u8 *)&tuya_data, TUYA_TRIPLE_LENGTH);
+    if (vm_write_result == TUYA_TRIPLE_LENGTH) {
+        printf("Tuya triple data write success!!!");
+    } else  {
+        printf("Tuya triple data write failed!!!");
+    }
+}
+```
+
+# BUG:加快APP断开速度
+
+调用
+
+- `tuya_app_setting_info_reset`
+- `tuya_earphone_state_enter_soft_poweroff`
+
+```c
+//断开BLE 使APP断开更加快速，不然会慢很多
+    if(tws_api_get_role() == TWS_ROLE_MASTER){
+        tuya_ble_gap_disconnect();
+    }
+```
+
+# BUG:APP播放暂停不同步
+
+- 添加定时器进行校准
+- 手机A2DP状态改变后，发送多次保证。避免手机暂停音乐后快速点击APP中的播放导致状态不同步。
+
+```c
+u16 tuya_play_status_indicate_repeat_timer_id = 0;
+u8 tuya_play_status_indicate_repeat_timer_cnt = 0;
+void tuya_play_status_indicate_repeat_timer(void *priv){
+
+    printf("tuya_play_status_indicate_repeat_timer\n");
+    tuya_play_status_indicate(bt_a2dp_get_status() == BT_MUSIC_STATUS_STARTING ? 1 : 0);
+
+    tuya_play_status_indicate_repeat_timer_cnt++;
+
+    if(tuya_play_status_indicate_repeat_timer_cnt > 10){
+        sys_timer_del(tuya_play_status_indicate_repeat_timer_id);
+        tuya_play_status_indicate_repeat_timer_id = 0;
+        tuya_play_status_indicate_repeat_timer_cnt = 0;
+    }
+}
+
+void tuya_play_status_indicate_calibration(){
+        if(tuya_play_status_indicate_repeat_timer_id != 0){
+            sys_timer_del(tuya_play_status_indicate_repeat_timer_id);
+            tuya_play_status_indicate_repeat_timer_id = 0;
+            tuya_play_status_indicate_repeat_timer_cnt = 0;
+        }
+        tuya_play_status_indicate_repeat_timer_id = sys_timer_add(NULL, tuya_play_status_indicate_repeat_timer, 500);
+}
+static int tuya_bt_status_event_handler(int *msg)
+{
+    struct bt_event *bt = (struct bt_event *)msg;
+
+    printf("tuya_bt_status_event_handler event:0x%x\n", bt->event);
+    switch (bt->event) {
+    case BT_STATUS_SECOND_CONNECTED:
+    case BT_STATUS_FIRST_CONNECTED:
+        tuya_conn_state_set_and_indicate(1);
+        break;
+    case BT_STATUS_FIRST_DISCONNECT:
+    case BT_STATUS_SECOND_DISCONNECT:
+        tuya_conn_state_set_and_indicate(0);
+        break;
+    case BT_STATUS_AVRCP_VOL_CHANGE:
+        //tuya_volume_indicate(bt->value * 16 / 127);底层函数中有了，避免多次上报导致音量条跳动。
+        break;
+    case BT_STATUS_A2DP_MEDIA_START: 
+        tuya_play_status_indicate_calibration();
+        break;
+    case BT_STATUS_A2DP_MEDIA_STOP:
+        tuya_play_status_indicate_calibration();
+        break;
+    default:
+        break;
+    }
+    return 0;
+}    
+
+//APP自己的DPID指令处理也上报，防止手机暂停后，还没发送状态同步时，APP快速点击开始导致打断了上报而状态不一致。
+//这里上报还可以保证APP指令同步，比如没有手机事先放音乐的话，APP发送指令是没有效果的，但是图标已经变了，通过这种方式可以校准图标。
+case DPID_MUSIC_PP:
+        //播放/暂停
+        printf("tuya play state:%d\n", data[0]);
+        /* tuya_post_key_event(TUYA_MUSIC_PP); */
+        bt_cmd_prepare(USER_CTRL_AVCTP_OPID_PLAY, 0, NULL);
+        extern void tuya_play_status_indicate_calibration();
+        tuya_play_status_indicate_calibration();
+        break;
+```
+
 # BUG
 
-- APP删除设备后很难弹窗
 - 双耳连接，单耳入仓，APP会立马断开，后面会回连。
   - 似乎主耳入仓才会。
   - 后面再出仓，电量不更新，还是灰色。
