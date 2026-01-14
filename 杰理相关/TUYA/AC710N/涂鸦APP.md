@@ -3041,32 +3041,49 @@ void set_triple_info(u8 *data)
 # BUG:APP播放暂停不同步
 
 - 添加定时器进行校准
-- 手机A2DP状态改变后，发送多次保证。避免手机暂停音乐后快速点击APP中的播放导致状态不同步。
+- 手机A2DP状态改变后，先上报后防抖动确保状态一致。避免手机暂停音乐后快速点击APP中的播放导致状态不同步。
 
 ```c
 u16 tuya_play_status_indicate_repeat_timer_id = 0;
 u8 tuya_play_status_indicate_repeat_timer_cnt = 0;
+u8 play_status_old = 0;
+u8 play_status_cnt = 0;
 void tuya_play_status_indicate_repeat_timer(void *priv){
-
-    printf("tuya_play_status_indicate_repeat_timer\n");
-    tuya_play_status_indicate(bt_a2dp_get_status() == BT_MUSIC_STATUS_STARTING ? 1 : 0);
 
     tuya_play_status_indicate_repeat_timer_cnt++;
 
-    if(tuya_play_status_indicate_repeat_timer_cnt > 10){
+    if(play_status_old != (bt_a2dp_get_status() == BT_MUSIC_STATUS_STARTING ? 1 : 0)){
+        //如果前后状态不一致
+        play_status_cnt++;
+        if(play_status_cnt > 4){
+            //累积上报新状态
+            printf("first_tuya_play_status_indicate_repeat_timer\n");
+            tuya_play_status_indicate(bt_a2dp_get_status() == BT_MUSIC_STATUS_STARTING ? 1 : 0);
+        }
+    }else if(play_status_old == (bt_a2dp_get_status() == BT_MUSIC_STATUS_STARTING ? 1 : 0)) {
+        //状态一致的话，则累积清空
+        play_status_cnt = 0;
+    }
+
+    if(tuya_play_status_indicate_repeat_timer_cnt > 6){
         sys_timer_del(tuya_play_status_indicate_repeat_timer_id);
         tuya_play_status_indicate_repeat_timer_id = 0;
         tuya_play_status_indicate_repeat_timer_cnt = 0;
     }
 }
-
 void tuya_play_status_indicate_calibration(){
-        if(tuya_play_status_indicate_repeat_timer_id != 0){
-            sys_timer_del(tuya_play_status_indicate_repeat_timer_id);
-            tuya_play_status_indicate_repeat_timer_id = 0;
-            tuya_play_status_indicate_repeat_timer_cnt = 0;
-        }
-        tuya_play_status_indicate_repeat_timer_id = sys_timer_add(NULL, tuya_play_status_indicate_repeat_timer, 500);
+    play_status_old = (bt_a2dp_get_status() == BT_MUSIC_STATUS_STARTING ? 1 : 0);
+
+    //先上报一次再防抖处理
+    printf("first_tuya_play_status_indicate_repeat_timer\n");
+    tuya_play_status_indicate(play_status_old);
+
+    if(tuya_play_status_indicate_repeat_timer_id != 0){
+        sys_timer_del(tuya_play_status_indicate_repeat_timer_id);
+        tuya_play_status_indicate_repeat_timer_id = 0;
+        tuya_play_status_indicate_repeat_timer_cnt = 0;
+    }
+    tuya_play_status_indicate_repeat_timer_id = sys_timer_add(NULL, tuya_play_status_indicate_repeat_timer, 500);
 }
 static int tuya_bt_status_event_handler(int *msg)
 {
@@ -3086,6 +3103,7 @@ static int tuya_bt_status_event_handler(int *msg)
         //tuya_volume_indicate(bt->value * 16 / 127);底层函数中有了，避免多次上报导致音量条跳动。
         break;
     case BT_STATUS_A2DP_MEDIA_START: 
+        //问题是到达这个case的时间太久了
         tuya_play_status_indicate_calibration();
         break;
     case BT_STATUS_A2DP_MEDIA_STOP:
@@ -3095,19 +3113,148 @@ static int tuya_bt_status_event_handler(int *msg)
         break;
     }
     return 0;
-}    
+}
+```
 
-//APP自己的DPID指令处理也上报，防止手机暂停后，还没发送状态同步时，APP快速点击开始导致打断了上报而状态不一致。
-//这里上报还可以保证APP指令同步，比如没有手机事先放音乐的话，APP发送指令是没有效果的，但是图标已经变了，通过这种方式可以校准图标。
-case DPID_MUSIC_PP:
-        //播放/暂停
-        printf("tuya play state:%d\n", data[0]);
-        /* tuya_post_key_event(TUYA_MUSIC_PP); */
-        bt_cmd_prepare(USER_CTRL_AVCTP_OPID_PLAY, 0, NULL);
-        extern void tuya_play_status_indicate_calibration();
-        tuya_play_status_indicate_calibration();
+- 当手机点击暂停时，手机音乐已经暂停，耳机程序还没到case时APP显示播放状态，这时APP点击暂停。这个时候耳机是暂停的所以响应指令是音乐播放！导致图标是暂停，音乐实际是播放。究其原因还是因为APP实际指令不是播放还是暂停而是`bt_cmd_prepare(USER_CTRL_AVCTP_OPID_PLAY, 0, NULL);`没有校验机制，耳机也无法获取APP的图标状态。不一致后，再点击一次，图标变为播放，音乐实际是暂停，**这时校准可以生效，把图标校准过来**。
+
+# BUG:APP应用连续ANC模式切换失效
+
+- 打印进入了，但是提示音丢失，模式没有切换过来
+
+![9b769f7d-1be5-4454-9c92-c9438ec30266](./涂鸦APP.assets/9b769f7d-1be5-4454-9c92-c9438ec30266.png)
+
+提示音结束边缘再一次切换会导致。
+
+```c
+[00:16:39.485]<--------------  tuya_data_parse  -------------->
+[00:16:39.487]get_sn = 14, id = 8, type = 4, data_len = 1, data:
+00 
+[00:16:39.488]tuya----anc----data[0]=0
+[00:16:39.488]tuya----anc----tuya_anc_mode=2
+[00:16:39.489]tuya noise_mode: 0----data[0]=0
+[00:16:39.489]tuya syscfg_write error = 0, please check
+[00:16:39.491]tuya_anc_swtich_deal_os, mode:2
+[00:16:39.491]anc mode switch lock //触发锁存机制
+[00:16:39.541][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:16:39.543]tuya_app_cb_handler, evt:0x51, task:app_core
+[00:16:39.544]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:30, type:0x0, mode:0x0, ack:0x0, status:0x0#
+[00:16:40.950][JLSTREAM]dec_err: 40
+[00:16:40.972][JLSTREAM]dec_end: 0
+[00:16:40.980][DAC]>>>>>>>>>>>>del dac syncts 42578c
+[00:16:40.981][JLSTREAM]send_callback: app_core, event 10, err 0
+[00:16:40.982]tone_callback: a, 8
+[00:16:40.983][JLSTREAM]free_stream: 421cac
+[00:16:40.983][JLSTREAM]decoder_release: 4252a4
+[00:16:40.984][JLSTREAM]release: jlstream 20
+[00:16:40.985]tws_anc_tone_callback: 10
+[00:16:40.985]anc_tone_play_cb,anc_mode:3,3,new_mode:3
+[00:16:40.986]anc switch,state:anc_open
+[00:16:40.987]anc open now,switch mode:3
+[00:16:40.987]anc_fade:0,dly:53
+[00:16:41.042]ANC_MSG_RUN:Transparency//维持上一个状态
+[00:16:41.042]>> audio_adc_analog_status_add_check ch:0 add:-1 cur_status:1
+[00:16:41.043]>> audio_adc_analog_status_add_check ch:0 add:0 cur_status:0
+[00:16:41.044]>> audio_adc_analog_status_add_check ch:1 add:0 cur_status:0
+[00:16:41.045]RESTS : 0xfe214bc
+[00:16:41.045]>> audio_common_power_close cur_status:2
+[00:16:41.046]mic0_en 1,mic1_en 0
+[00:16:41.046]>> audio_common_power_open cur_status:1
+[00:16:41.047]>> audio_adc_analog_status_add_check ch:0 add:1 cur_status:0
+[00:16:41.048][CLOCK]---anc clk set : 0
+[00:16:41.050][CLOCK]---anc clk set : 48000000
+```
+
+![image-20260113170417038](./涂鸦APP.assets/image-20260113170417038.png)
+
+- 上一个流程没有搞完，下一个流程就开始触发锁存。提示音丢失
+- 点击第一个后，迅速点击其他两个模式，触发锁存还是以第一个为准。手机图标变了。此时切回第一个模式，ANC切换相同模式，提示音再丢失一次
+
+```c
+[00:01:20.051]<--------------  tuya_data_parse  -------------->
+[00:01:20.054]get_sn = 7, id = 8, type = 4, data_len = 1, data:
+01 
+[00:01:20.055]tuya----anc----data[0]=1
+[00:01:20.055]tuya----anc----tuya_anc_mode=1
+[00:01:20.056]tuya noise_mode: 1----data[0]=1
+[00:01:20.056]tuya syscfg_write error = 0, please check
+[00:01:20.063]tuya_anc_swtich_deal_os, mode:1
+[00:01:20.065]anc mode switch err:same mode//相同模式
+```
+
+# BUG:偶尔DPID指令处理失效？？？
+
+APP无法控制音乐和切换ANC模式
+
+操作推送到OS中处理：
+
+- `apps\common\third_party_profile\tuya_protocol\app\demo\tuya_ble_app_demo.c`
+
+```c
+void tuya_anc_swtich_deal(u8 mode){
+    printf("tuya_anc_swtich_deal_os, mode:%d", mode);
+    anc_mode_switch(mode, 1);
+}
+
+void tuya_anc_switch_deal_os(u8 mode){
+    int argv[3];
+    argv[0] = (int)tuya_anc_swtich_deal;
+    argv[1] = 1;
+    argv[2] = mode;
+    os_taskq_post_type("app_core", Q_CALLBACK, 3, argv);
+}
+    case DPID_ANC_SWITCH_MODE:
+        //设置降噪模式
+        printf("tuya----anc----data[0]=%d",data[0]);
+        if(data[0] == 0) {
+            tuya_anc_mode = ANC_ON;
+        } else if (data[0] == 1) {
+            tuya_anc_mode = ANC_OFF;
+        } else if (data[0] == 2) {
+            tuya_anc_mode = ANC_TRANSPARENCY;
+        }
+        printf("tuya----anc----tuya_anc_mode=%d",tuya_anc_mode);
+#if TCFG_AUDIO_ANC_ENABLE
+        //anc_mode_switch(tuya_anc_mode, 1);有时候无法执行成功，快速操作时，推到OS中
+        tuya_anc_switch_deal_os(tuya_anc_mode);
+#endif
+        tuya_info.noise_info.noise_mode = data[0];
+        printf("tuya noise_mode: %d----data[0]=%d\n", tuya_info.noise_info.noise_mode, data[0]);
         break;
 ```
+
+## 播放暂停偶尔失效
+
+```c
+[00:02:32.643][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:02:32.653]tuya_app_cb_handler, evt:0x43, task:app_core
+[00:02:32.655]tuya_data_parse, p_data:0x1050ec, len:5
+07 01 00 01 00 
+[00:02:32.655]<--------------  tuya_data_parse  -------------->
+[00:02:32.656]get_sn = 2, id = 7, type = 1, data_len = 1, data:
+00 
+[00:02:32.658]tuya play state:0
+[00:02:32.659]tuya syscfg_write error = 0, please check
+[00:02:32.662]tuya_music_pp_deal_os
+[00:02:32.708]avctp_passthrough_rsp:46
+[00:02:32.734][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:02:32.737]tuya_app_cb_handler, evt:0x51, task:app_core
+[00:02:32.740]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:9, type:0x0, mode:0x0, ack:0x0, status:0x0
+[00:02:32.744]avctp_passthrough_rsp:c6
+[00:02:33.908][clock-manager]cpu0: 23% cpu1: 0% jlstream: 55% curr_clk:48000000  min_clk:48000000 dest_clk:48000000, 1
+[00:02:33.910][CLOCK]---sys clk set : 48000000##
+[00:02:37.909][clock-manager]cpu0: 22% cpu1: 0% jlstream: 54% curr_clk:48000000  min_clk:48000000 dest_clk:48000000, 1
+[00:02:37.911][CLOCK]---sys clk set : 48000000##
+
+case DPID_MUSIC_PP:
+//播放/暂停
+printf("tuya play state:%d\n", data[0]);
+tuya_post_key_event(TUYA_MUSIC_PP); 
+//bt_cmd_prepare(USER_CTRL_AVCTP_OPID_PLAY, 0, NULL);//这个有概率执行失效
+break;
+```
+
+
 
 # BUG
 
