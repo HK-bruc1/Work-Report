@@ -2880,6 +2880,59 @@ const struct eq_seg_info eq_tab_normal[] = {
 };
 ```
 
+## 补丁
+
+- `apps\common\third_party_profile\tuya_protocol\app\demo\tuya_ble_app_demo.c`
+- `apps\common\third_party_profile\tuya_protocol\tuya_protocol.c`
+
+```c
+void tuya_bt_ble_init(void)
+{
+    log_info("***** ble_init******\n");
+    //...
+    extern void tuya_ble_app_init();
+    tuya_ble_app_init();
+//...
+void tuya_ble_app_init(void)
+{
+    device_param.device_id_len = 16;    //If use the license stored by the SDK,initialized to 0, Otherwise 16 or 20.
+
+    int ret = 0;
+    tuya_earphone_key_init();//更新了耳机的缓存数组
+
+    //涂鸦流程中添加外部eq初始化
+    char eq_setting[11] = {0};
+    syscfg_read(CFG_RCSP_ADV_EQ_DATA_SETTING, eq_setting, 11);
+    printf(">>> tuya init eq_info:\n");
+    put_buf((u8 *)eq_setting, 11);
+    char temp_eq_buf[10] = {0};
+    if (!memcmp(temp_eq_buf, eq_setting, 10)) {
+        eq_mode_set(EQ_MODE_NORMAL);
+    } else {
+        tuya_eq_data_deal(eq_setting);
+    }
+ //...   
+//指定设置某个eq效果表
+int eq_mode_set(EQ_MODE mode)
+{
+    if (mode >= ARRAY_SIZE(eq_type_tab)) {
+        log_e("mode err %d\n", mode);
+        return -1;//
+    }
+
+    if(mode == EQ_MODE_NORMAL){
+        eq_file_cfg_switch("MusicEqBt", 0);
+        log_e("eq_mode_set----EQ_MODE_NORMAL-----MusicEqBt\n");
+        return 0;
+    }
+```
+
+- 一开始整个涂鸦流程都没有eq的设置，不知道默认的eq是什么。。。反正不是MusicEqBt节点。
+
+## 涂鸦的eq流程（待整理）
+
+eq的生效流程
+
 # 测试模式与生产模式
 
 ## 后续连不上涂鸦APP
@@ -3118,6 +3171,45 @@ static int tuya_bt_status_event_handler(int *msg)
 
 - 当手机点击暂停时，手机音乐已经暂停，耳机程序还没到case时APP显示播放状态，这时APP点击暂停。这个时候耳机是暂停的所以响应指令是音乐播放！导致图标是暂停，音乐实际是播放。究其原因还是因为APP实际指令不是播放还是暂停而是`bt_cmd_prepare(USER_CTRL_AVCTP_OPID_PLAY, 0, NULL);`没有校验机制，耳机也无法获取APP的图标状态。不一致后，再点击一次，图标变为播放，音乐实际是暂停，**这时校准可以生效，把图标校准过来**。
 
+## 根本原因
+
+多次上报图标还是有波动现象
+
+`apps\common\third_party_profile\tuya_protocol\app\demo\tuya_ble_app_demo.c`
+
+```c
+void tuya_data_parse(tuya_ble_cb_evt_param_t *event)
+    case DPID_MUSIC_PP:
+        //播放/暂停
+        printf("tuya play state:%d\n", data[0]);
+        //tuya_post_key_event(TUYA_MUSIC_PP); 
+        //bt_cmd_prepare(USER_CTRL_AVCTP_OPID_PLAY, 0, NULL);//这个有概率执行失效
+        //不要根据耳机的状态去播放暂停而是根据APP下发的指令数据
+        tuya_dpid_music_pp_deal(data[0]);
+        break;
+```
+
+- `tuya_post_key_event`库里没有实现
+- `bt_cmd_prepare(USER_CTRL_AVCTP_OPID_PLAY, 0, NULL);`这个是根据耳机的状态去播放和暂停，而不是根据指令去控制，如果APP操作快一些，耳机有操作原子性保护，就会导致图标不一致。就会操作相反，直到再次连接APP同步播放状态。
+
+```c
+void tuya_dpid_music_pp_deal(u8 data){
+    if(data == 0){
+        //APP发送暂停命令
+        if((bt_a2dp_get_status() == BT_MUSIC_STATUS_STARTING ? 1 : 0)){
+            //如果在播放中，则发送暂停命令
+            bt_cmd_prepare(USER_CTRL_AVCTP_OPID_PAUSE, 0, NULL);
+        }
+    } else if(data == 1){
+        //APP发送播放命令
+        if(!(bt_a2dp_get_status() == BT_MUSIC_STATUS_STARTING ? 1 : 0)){
+            //如果在暂停中，则发送播放命令
+            bt_cmd_prepare(USER_CTRL_AVCTP_OPID_PLAY, 0, NULL);
+        }
+    }
+}
+```
+
 # BUG:APP应用连续ANC模式切换失效
 
 - 打印进入了，但是提示音丢失，模式没有切换过来
@@ -3182,11 +3274,11 @@ static int tuya_bt_status_event_handler(int *msg)
 [00:01:20.065]anc mode switch err:same mode//相同模式
 ```
 
-# BUG:偶尔DPID指令处理失效？？？
+# BUG:偶尔DPID指令处理失效
 
-APP无法控制音乐和切换ANC模式
+APP无法控制ANC切换
 
-操作推送到OS中处理：
+## 操作推送到OS中处理
 
 - `apps\common\third_party_profile\tuya_protocol\app\demo\tuya_ble_app_demo.c`
 
@@ -3223,44 +3315,31 @@ void tuya_anc_switch_deal_os(u8 mode){
         break;
 ```
 
-## 播放暂停偶尔失效
+# BUG:切换ANC操作太快导致触发锁存机制，导致图标不同步
+
+触发锁存机制时，提示音和模式都不会报，但是此时APP已经切换图标了，这里做一个延迟上报保证图标同步。
 
 ```c
-[00:02:32.643][tuya_demo]write_callback, handle= 0x0006,size = 52 
-[00:02:32.653]tuya_app_cb_handler, evt:0x43, task:app_core
-[00:02:32.655]tuya_data_parse, p_data:0x1050ec, len:5
-07 01 00 01 00 
-[00:02:32.655]<--------------  tuya_data_parse  -------------->
-[00:02:32.656]get_sn = 2, id = 7, type = 1, data_len = 1, data:
-00 
-[00:02:32.658]tuya play state:0
-[00:02:32.659]tuya syscfg_write error = 0, please check
-[00:02:32.662]tuya_music_pp_deal_os
-[00:02:32.708]avctp_passthrough_rsp:46
-[00:02:32.734][tuya_demo]write_callback, handle= 0x0006,size = 52 
-[00:02:32.737]tuya_app_cb_handler, evt:0x51, task:app_core
-[00:02:32.740]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:9, type:0x0, mode:0x0, ack:0x0, status:0x0
-[00:02:32.744]avctp_passthrough_rsp:c6
-[00:02:33.908][clock-manager]cpu0: 23% cpu1: 0% jlstream: 55% curr_clk:48000000  min_clk:48000000 dest_clk:48000000, 1
-[00:02:33.910][CLOCK]---sys clk set : 48000000##
-[00:02:37.909][clock-manager]cpu0: 22% cpu1: 0% jlstream: 54% curr_clk:48000000  min_clk:48000000 dest_clk:48000000, 1
-[00:02:37.911][CLOCK]---sys clk set : 48000000##
-
-case DPID_MUSIC_PP:
-//播放/暂停
-printf("tuya play state:%d\n", data[0]);
-tuya_post_key_event(TUYA_MUSIC_PP); 
-//bt_cmd_prepare(USER_CTRL_AVCTP_OPID_PLAY, 0, NULL);//这个有概率执行失效
-break;
+    if (anc_hdl->mode_switch_lock) {
+        user_anc_log("anc mode switch lock\n");
+#if (THIRD_PARTY_PROTOCOLS_SEL&TUYA_DEMO_EN)
+//触发锁存后，最新的切换操作失败，需要重新上报一下当前的ANC信息
+        extern void tuya_anc_mode_indicate_callback(void *priv);
+        extern u16 tuya_anc_status_indicate_timer_id;
+        if(tuya_anc_status_indicate_timer_id != 0){
+            sys_timeout_del(tuya_anc_status_indicate_timer_id);
+            tuya_anc_status_indicate_timer_id = 0;
+        }
+        tuya_anc_status_indicate_timer_id = sys_timeout_add(NULL, tuya_anc_mode_indicate_callback, 1000);
+#endif
+        return -1;
+    }
 ```
-
-
 
 # BUG
 
 - 双耳连接，单耳入仓，APP会立马断开，后面会回连。
   - 似乎主耳入仓才会。
-  - 后面再出仓，电量不更新，还是灰色。
   - 主从切换断连是SDK问题。
   - **公版不能主从切换**
 - 定时器关机触发后，再连接状态还是1分钟界面。不应该恢复原来的设置界面吗？

@@ -171,6 +171,96 @@ static void update_work_setting_state(void)
 }
 ```
 
+## 改进
+
+灯效直接写在最底层函数，无论从那里进来都可以触发。
+
+```c
+    case APP_MSG_LOW_LANTECY:
+        if (bt_get_low_latency_mode() == 0) {
+            //不是低延迟模式就进入否则退出
+            bt_enter_low_latency_mode();
+        } else {
+            bt_exit_low_latency_mode();
+        }
+        break;
+static void update_work_setting_state(void)
+{
+#if TCFG_USER_TWS_ENABLE
+    if (get_bt_tws_connect_status() && (tws_api_get_role() == TWS_ROLE_SLAVE)) {
+        return;
+    }
+#endif
+    if (RCSPWorkModeNormal == g_work_mode) {
+        //APP直接切换时不会走灯效流程，这里直接设置退出游戏模式灯效
+        //update_normal_led();直接写里面，APP与不带APP都可以通用
+        bt_set_low_latency_mode(0, 1, 300);
+    } else if (RCSPWorkModeGame == g_work_mode) {
+        //APP直接切换时不会走灯效流程，这里直接设置游戏模式灯效
+        //update_game_led();
+        bt_set_low_latency_mode(1, 1, 300);
+    } else {
+        printf("%s, set deal none\n", __FUNCTION__);
+    }
+}
+void bt_set_low_latency_mode(int enable, u8 tone_play_enable, int delay_ms)
+{
+    /*
+     * 未连接手机,操作无效
+     */
+    int state = tws_api_get_tws_state();
+    // if (state & TWS_STA_PHONE_DISCONNECTED) {
+    //     return;
+    // }
+    //这里改为conf配置，更加灵活，虽然未连接蓝牙，游戏模式没有意义，播放个提示音
+    //使用APP自然可以直接切换游戏模式
+
+    //不用默认的led游戏模式流程直接在这里更新灯效，APP与普通都可以
+    if(enable){
+        //游戏模式灯效
+        extern void update_game_led(void);
+        update_game_led();
+    }else {
+        //退出游戏模式灯效
+        extern void update_normal_led(void);
+        update_normal_led();
+    }
+
+    const char *fname = enable ? get_tone_files()->low_latency_in :
+                        get_tone_files()->low_latency_out;
+    g_printf("bt_set_low_latency_mode=%d\n", enable);
+#if TCFG_USER_TWS_ENABLE
+    if (state & TWS_STA_SIBLING_CONNECTED) {
+        if (delay_ms < 100) {
+            delay_ms = 100;
+        }
+        tws_play_tone_file_alone_callback(fname, delay_ms, 0x6F90E37B);
+    } else
+#endif
+    {
+        play_tone_file_alone(fname);
+        tws_api_low_latency_enable(enable);
+        a2dp_player_low_latency_enable(enable);
+    }
+    if (enable) {
+        if (bt_get_total_connect_dev()) {
+            lmp_hci_write_scan_enable(0);
+        }
+
+    } else {
+#if TCFG_USER_TWS_ENABLE
+        tws_dual_conn_state_handler();
+#endif
+    }
+
+#if (THIRD_PARTY_PROTOCOLS_SEL&TUYA_DEMO_EN)
+        void tuya_game_mode_indicate(u8 status);
+        tuya_game_mode_indicate(enable);
+#endif
+
+}
+```
+
 # adv_key_setting的调用链
 
 `apps\common\third_party_profile\jieli\rcsp\server\functions\rcsp_setting_opt\settings\adv_key_setting.c`
@@ -236,4 +326,6 @@ static RCSP_SETTING_OPT adv_key_opt = {
 };
 REGISTER_APP_SETTING_OPT(adv_key_opt);
 ```
+
+
 

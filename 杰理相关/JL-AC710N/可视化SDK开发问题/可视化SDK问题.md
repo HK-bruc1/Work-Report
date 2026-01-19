@@ -2230,6 +2230,81 @@ static int get_pipeline_uuid(const char *name)
 
 确定是差分接法后，暂时以P端作为输入端口。不行再改为N端作为输入端口。
 
+## DAC声道与输出方式
+
+![image-20260116092944438](./可视化SDK问题.assets/image-20260116092944438.png)
+
+**双声道确认：是**
+
+- DACLN (pin 3) 和 DACLP (pin 4)：左声道（Left channel）
+- DACRN (pin 1) 和 DACRP (pin 2)：右声道（Right channel）
+
+**2. 声道识别**
+
+- **左声道**：DACL**N**/DACL**P**（L = Left）
+- **右声道**：DACR**N**/DACR**P**（R = Right）
+
+**3. 输出方式：差分输出** 从引脚命名可以明确看出：
+
+- N 后缀 = Negative（负端）
+- P 后缀 = Positive（正端）
+
+每个声道都有一对差分信号：
+
+- 左声道差分对：DACLP (+) 和 DACLN (-)
+- 右声道差分对：DACRP (+) 和 DACRN (-)
+
+![image-20260116093450998](./可视化SDK问题.assets/image-20260116093450998.png)
+
+AC7106F 的判断
+
+```
+DACRN (pin 1)  } 右声道差分对
+DACRP (pin 2)  }
+
+DACLN (pin 3)  } 左声道差分对
+DACLP (pin 4)  }
+```
+
+- 有 **L** 和 **R** 两组 → **双声道**
+
+AC7103D 的判断
+
+```
+DACRN (pin 19)  } 只有右声道差分对
+DACRP (pin 18)  }
+```
+
+**只有 R（Right）**，没有 L（Left）→ **单声道**
+
+为什么是"右"不是"左"？这只是设计者的标注习惯，在单声道应用中，标为R或L都可以，但从引脚名称看确实标注的是Right
+
+数引脚对数：
+
+- 双声道差分 = 4个引脚（2对差分）
+- 单声道差分 = 2个引脚（1对差分）
+
+### 单端输出
+
+| 输出类型     | 引脚命名特征      | 示例               |
+| ------------ | ----------------- | ------------------ |
+| **差分输出** | 同时有N和P配对    | DACLP + DACLN      |
+| **单端输出** | 只有一个引脚/声道 | DACL, LOUT, DACOUT |
+
+```c
+差分输出（需要2个引脚/声道）：
+左声道: DACLP, DACLN
+右声道: DACRP, DACRN
+单端输出（只需1个引脚/声道）：
+左声道: DACL 或 LOUT
+右声道: DACR 或 ROUT
+```
+
+看**是否成对出现**：
+
+- 成对出现（xxP/xxN 或 xx+/xx-）→ **差分**
+- 单独出现（只有一个引脚）→ **单端**
+
 # 接口
 
 ## 判断蓝牙连接状态
@@ -3967,6 +4042,35 @@ S<>
 [00:01:29.309][LP_KEY]lp_touch_key_charge_mode_exit//打开触摸
 [00:01:29.309][LP_KEY]lp_touch_key_identify_algo_reset
 [00:01:29.310][LP_KEY]lpctmu enable
+```
+
+## 带APP无法进入低功耗
+
+```c
+void bt_check_enter_sniff()
+{
+    u8 addr[12];
+#if TCFG_BT_SNIFF_ENABLE
+
+#if TCFG_AUDIO_ANC_ENABLE
+    if (anc_train_open_query() || anc_online_busy_get()) { //如果ANC训练则不进入SNIFF
+        return;
+    }
+#endif
+
+#if 0//(RCSP_ADV_EN) 带APP这里影响进入低功耗，不清楚作用暂时注释
+    u8 rcsp_max_con_dev = rcsp_max_support_con_dev_num();
+    u8 rcsp_conn_num = bt_rcsp_device_conn_num();
+    if (get_ble_adv_modify() || ((rcsp_conn_num < rcsp_max_con_dev) && get_ble_adv_notify())) {
+        // rcsp需要通知信息到手机 || rcsp未连接且需要通过广播信息到手机
+        return;
+    }
+#endif
+
+    if (sniff_ready_status) {
+        sniff_ready_status = 0;
+        return;
+    }
 ```
 
 # 芯片flash大小
