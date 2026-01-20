@@ -1292,3 +1292,29 @@ void charge_ldo5v_off_deal(void)
     led_ui_set_state(LED_STA_ALL_OFF, DISP_CLEAR_OTHERS);
 #endif
 ```
+
+## 加一个开机灯效与开机后的未连接灯效
+
+- 需求背景：开机灯效是红灯常亮1s后进入循环灯效如红蓝交替闪。
+  - 这种情况数组形式的组合灯效也没法实现，新增组合灯效，对于局部循环的灯效数组形式也无法实现，LED_ACTION_LOOP会直接从整个数组循环
+
+手动开机的流程是
+
+```c
+[00:00:00.437][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_POWER_ON
+[00:00:01.647][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
+[00:00:01.649][LED_UI]MSG_FROM_APP----led_enter_mode----APP_MSG_ENTER_MODE----APP_MODE_BT
+[00:00:01.655][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIREDP
+```
+
+出仓灯效流程
+
+```c
+[00:00:01.647][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_INIT_OK
+[00:00:01.649][LED_UI]MSG_FROM_APP----led_enter_mode----APP_MSG_ENTER_MODE----APP_MODE_BT
+[00:00:01.655][LED_UI]MSG_FROM_APP----ui_app_msg_handler----APP_MSG_TWS_UNPAIREDP
+```
+
+- `BT_STATUS_INIT_OK`做开机灯效
+- `APP_MODE_BT`做开机后未连接的灯效
+- 已经验证可以，其他影响暂时不知道。

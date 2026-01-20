@@ -3315,6 +3315,166 @@ void tuya_anc_switch_deal_os(u8 mode){
         break;
 ```
 
+## 部分机型依旧失效
+
+```c
+[00:20:19.553]<--------------  tuya_data_parse  -------------->
+[00:20:19.554]get_sn = 26, id = 8, type = 4, data_len = 1, data:
+02 
+[00:20:19.555]tuya----anc----data[0]=2
+[00:20:19.555]tuya----anc----tuya_anc_mode=3
+[00:20:19.556]tuya noise_mode: 2----data[0]=2
+[00:20:19.556]tuya syscfg_write error = 0, please check
+[00:20:19.557]tuya_anc_swtich_deal_os, mode:3
+[00:20:19.558]anc mode switch err:same mode
+[00:20:19.630][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:20:19.634]tuya_app_cb_handler, evt:0x51, task:app_core
+[00:20:19.635]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:38, type:0x0, mode:0x0, ack:0x0, status:0x0
+[00:20:21.132][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:20:21.136]tuya_app_cb_handler, evt:0x43, task:app_core
+[00:20:21.137]tuya_data_parse, p_data:0x113318, len:5
+08 04 00 01 01 
+[00:20:21.139]<--------------  tuya_data_parse  -------------->
+[00:20:21.140]get_sn = 27, id = 8, type = 4, data_len = 1, data:
+01 
+[00:20:21.141]tuya----anc----data[0]=1
+[00:20:21.141]tuya----anc----tuya_anc_mode=1
+[00:20:21.142]tuya noise_mode: 1----data[0]=1
+[00:20:21.143]tuya syscfg_write error = 0, please check
+[00:20:21.150]tuya_anc_swtich_deal_os, mode:1
+[00:20:21.151]anc mode switch lock : 1
+[00:20:21.221][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:20:21.225]tuya_app_cb_handler, evt:0x51, task:app_core
+[00:20:21.226]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:38, type:0x0, mode:0x0, ack:0x0, status:0x0#
+[00:20:22.152]tuya_anc_mode_indicate,sn:38  sdk_anc_mode=1
+[00:20:22.213][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:20:22.218]tuya_app_cb_handler, evt:0x51, task:app_core
+[00:20:22.219]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:38, type:0x0, mode:0x0, ack:0x0, status:0x0
+[00:20:22.240][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:20:22.242]tuya_app_cb_handler, evt:0x43, task:app_core
+[00:20:22.244]tuya_data_parse, p_data:0x113318, len:5
+08 04 00 01 00 
+[00:20:22.248]<--------------  tuya_data_parse  -------------->
+[00:20:22.249]get_sn = 28, id = 8, type = 4, data_len = 1, data:
+00 
+[00:20:22.251]tuya----anc----data[0]=0
+[00:20:22.252]tuya----anc----tuya_anc_mode=2
+[00:20:22.253]tuya noise_mode: 0----data[0]=0
+[00:20:22.253]tuya syscfg_write error = 0, please check
+[00:20:22.255]tuya_anc_swtich_deal_os, mode:2
+[00:20:22.256]anc mode switch lock : 2
+[00:20:22.302][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:20:22.305]tuya_app_cb_handler, evt:0x51, task:app_core
+[00:20:22.305]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:39, type:0x0, mode:0x0, ack:0x0, status:0x0
+[00:20:23.257]tuya_anc_mode_indicate,sn:39  sdk_anc_mode=1
+[00:20:23.350][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:20:23.353]tuya_app_cb_handler, evt:0x51, task:app_core
+[00:20:23.354]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:39, type:0x0, mode:0x0, ack:0x0, status:0x0
+[00:20:25.510][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:20:25.513]tuya_app_cb_handler, evt:0x43, task:app_core
+[00:20:25.514]tuya_data_parse, p_data:0x113318, len:5
+07 01 00 01 00 
+[00:20:25.515]<--------------  tuya_data_parse  -------------->
+[00:20:25.516]get_sn = 29, id = 7, type = 1, data_len = 1, data:
+00 
+[00:20:25.517]tuya play state:0
+[00:20:25.518]tuya syscfg_write error = 0, please check
+[00:20:25.571][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:20:25.573]tuya_app_cb_handler, evt:0x51, task:app_core
+[00:20:25.574]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:40, type:0x0, mode:0x0, ack:0x0, status:0x0#####
+[00:21:21.162][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:21:21.165]tuya_app_cb_handler, evt:0x43, task:app_core
+[00:21:21.166]tuya_data_parse, p_data:0x113318, len:5
+07 01 00 01 01 
+[00:21:21.167]<--------------  tuya_data_parse  -------------->
+[00:21:21.168]get_sn = 2a, id = 7, type = 1, data_len = 1, data:
+01 
+[00:21:21.169]tuya play state:1
+[00:21:21.170]tuya syscfg_write error = 0, please check
+[00:21:21.251][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:21:21.255]tuya_app_cb_handler, evt:0x51, task:app_core
+[00:21:21.255]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:40, type:0x0, mode:0x0, ack:0x0, status:0x0
+[00:21:25.301][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:21:25.310]tuya_app_cb_handler, evt:0x43, task:app_core
+[00:21:25.311]tuya_data_parse, p_data:0x113318, len:5
+06 04 00 01 01 
+[00:21:25.312]<--------------  tuya_data_parse  -------------->
+[00:21:25.313]get_sn = 2b, id = 6, type = 4, data_len = 1, data:
+01 
+[00:21:25.314]tuya change_control: 1
+[00:21:25.314]tuya syscfg_write error = 0, please check
+[00:21:25.362][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:21:25.366]tuya_app_cb_handler, evt:0x51, task:app_core
+[00:21:25.367]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:40, type:0x0, mode:0x0, ack:0x0, status:0x0
+[00:21:28.091][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:21:28.093]tuya_app_cb_handler, evt:0x43, task:app_core
+[00:21:28.095]tuya_data_parse, p_data:0x113318, len:5
+06 04 00 01 00 
+[00:21:28.096]<--------------  tuya_data_parse  -------------->
+[00:21:28.097]get_sn = 2c, id = 6, type = 4, data_len = 1, data:
+00 
+[00:21:28.098]tuya change_control: 0
+[00:21:28.101]tuya syscfg_write error = 0, please check
+[00:21:28.181][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:21:28.184]tuya_app_cb_handler, evt:0x51, task:app_core
+[00:21:28.185]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:40, type:0x0, mode:0x0, ack:0x0, status:0x0
+```
+
+- 日常打印都没有了，卡在在，另一边也没有关键打印。
+
+## 暂停播放对比
+
+### 正常
+
+```c
+[00:02:19.912]<--------------  tuya_data_parse  -------------->
+[00:02:19.912]get_sn = 1, id = 7, type = 1, data_len = 1, data:
+00 
+[00:02:19.913]tuya play state:0
+[00:02:19.929]avctp_passthrough_rsp:46
+[00:02:19.948]avctp_passthrough_rsp:c6
+p
+[00:02:20.019][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:02:20.025]tuya_app_cb_handler, evt:0x51, task:app_core
+[00:02:20.026]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:10, type:0x0, mode:0x0, ack:0x0, status:0x0
+[00:02:20.112][EARPHONE]BT_STATUS_AVRCP_INCOME_OPID:70
+[00:02:20.113]dual_conn_btstack_event_handler:40
+[00:02:20.115][EARPHONE] BT STATUS DEFAULT
+[00:02:20.117]ui_bt_stack_msg_handler:40
+
+[00:02:20.118]tuya_bt_status_event_handler event:0x28
+ppppppppppppppppppppppppp
+[00:02:23.159]Received AVDTP_SUSPEND
+[00:02:23.160]sbc_codec_stop=142
+
+[00:02:23.161][EARPHONE] BT STATUS DEFAULT
+[00:02:23.163]dual_conn_btstack_event_handler:57
+[00:02:23.163][EARPHONE] BT STATUS DEFAULT
+[00:02:23.164]ui_bt_stack_msg_handler:57
+
+[00:02:23.164]tuya_bt_status_event_handler event:0x39
+[00:02:23.165][EARPHONE] BT STATUS DEFAULT
+[00:02:23.166]BT_STATUS_A2DP_MEDIA_STOP
+
+67 F8 58 B3 CC A4 
+[00:02:23.167]tws_a2dp_player_close
+```
+
+### 异常
+
+```c
+[00:26:17.808]<--------------  tuya_data_parse  -------------->
+[00:26:17.809]get_sn = 2d, id = 7, type = 1, data_len = 1, data:
+00 
+[00:26:17.810]tuya play state:0
+[00:26:17.811]tuya syscfg_write error = 0, please check
+[00:26:17.863][tuya_demo]write_callback, handle= 0x0006,size = 52 
+[00:26:17.865]tuya_app_cb_handler, evt:0x51, task:app_core
+[00:26:17.866]TUYA_BLE_CB_EVT_DP_DATA_SEND_RESPONSE, sn:40, type:0x0, mode:0x0, ack:0x0, status:0x0
+```
+
+
+
 # BUG:切换ANC操作太快导致触发锁存机制，导致图标不同步
 
 触发锁存机制时，提示音和模式都不会报，但是此时APP已经切换图标了，这里做一个延迟上报保证图标同步。
