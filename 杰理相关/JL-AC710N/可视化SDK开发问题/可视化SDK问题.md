@@ -858,10 +858,6 @@ u8 rcsp_setting_info_reset() //恢复默认的APP设置
 }
 ```
 
-完善：	
-
-- APP中的高低音的设置不能恢复到默认。
-
 # 灯效
 
 接口：`led_ui_set_state(LED_STA_RED_BLUE_FAST_FLASH_ALTERNATELY, DISP_CLEAR_OTHERS);`
@@ -3064,6 +3060,140 @@ ANC打开后效果像通透。原因：
 
 调试了ANC，合入后。因为通话时MIC的增益没有一致。比如通话MIC增益大一点例如13，ANC的增益为0的话。那么ANC效果可能一致卡在通透，没有效果不达标。ANC模式下接听电话时，ANC的MIC增益直接被从0拉到13，造成这种通透效果！
 
+## 切换顺序修改
+
+- 不开APP的话
+
+```c
+/*模式切换测试demo*/
+#define ANC_MODE_NUM	3 /*ANC模式循环切换*/
+static const u8 anc_mode_switch_tab[ANC_MODE_NUM] = {
+    _ANC_MOODE_1,
+    _ANC_MOODE_2,
+    _ANC_MOODE_3,
+};
+void anc_mode_next(void)
+{
+    if (anc_hdl) {
+        if (anc_train_open_query()) {
+            return;
+        }
+        u8 next_mode = 0;
+        local_irq_disable();
+        anc_hdl->param.anc_fade_en = ANC_FADE_EN;	//防止被其他地方清0
+        for (u8 i = 0; i < ANC_MODE_NUM; i++) {
+            if (anc_mode_switch_tab[i] == anc_hdl->param.mode) {
+                next_mode = i + 1;
+                if (next_mode >= ANC_MODE_NUM) {
+                    next_mode = 0;
+                }
+                if ((anc_hdl->mode_enable & BIT(anc_mode_switch_tab[next_mode])) == 0) {
+                    user_anc_log("anc_mode_filt,next:%d,en:%d", next_mode, anc_hdl->mode_enable);
+                    next_mode++;
+                    if (next_mode >= ANC_MODE_NUM) {
+                        next_mode = 0;
+                    }
+                }
+                //g_printf("fine out anc mode:%d,next:%d,i:%d",anc_hdl->param.mode,next_mode,i);
+                break;
+            }
+        }
+        local_irq_enable();
+        //user_anc_log("anc_next_mode:%d old:%d,new:%d", next_mode, anc_hdl->param.mode, anc_mode_switch_tab[next_mode]);
+        u8 new_mode = anc_mode_switch_tab[next_mode];
+        user_anc_log("new_mode:%s", anc_mode_str[new_mode]);
+        anc_mode_switch(anc_mode_switch_tab[next_mode], 1);
+    }
+}
+```
+
+**切换顺序特点**：
+
+- 完全由你自己定义的**数组顺序**决定（anc_mode_switch_tab）
+- 严格按照**数组下标循环**（0→1→2→0→1...）
+- 可以做到**任意自定义顺序**，而且**跳过不使能的模式**
+- **最接近人类直觉的“指定顺序循环”**
+
+带APP
+
+```c
+int update_anc_voice_key_opt(void)
+{
+    int ret = 0;
+#if (RCSP_ADV_ANC_VOICE)
+    u32 mask = g_anc_voice_key_mode[0] << 24 | g_anc_voice_key_mode[1] << 16 | g_anc_voice_key_mode[2] << 8 | g_anc_voice_key_mode[3];
+    // 获取当前处于什么模式
+#if TCFG_AUDIO_ANC_ENABLE
+    u8 cur_mode = anc_mode_get();
+#else
+    u8 cur_mode = ANC_OFF;
+#endif
+    u8 next_mode = cur_mode % ANC_VOICE_TYPE_MAX;
+    for (; next_mode < ANC_VOICE_TYPE_MAX; next_mode++) {
+        if (mask & BIT(next_mode)) {
+            rcsp_adv_voice_mode_update(next_mode % ANC_VOICE_TYPE_MAX);
+            return ret;
+        }
+    }
+    if (mask & BIT(next_mode % ANC_VOICE_TYPE_MAX)) {
+        rcsp_adv_voice_mode_update(next_mode % ANC_VOICE_TYPE_MAX);
+    }
+#endif
+    return ret;
+}
+```
+
+**切换顺序特点**：
+
+- 按**数值从小到大**的顺序找（0→1→2→3→...）
+- 从**当前模式开始往后**找第一个被使能（mask 里有）的模式
+- 找不到就**从 0 开始再找一遍**（相当于循环）
+- **本质是“升序循环”**，但严格来说是**“从当前值开始的升序 + 回环”**
+  - 是通过取余 + 从当前往后找来实现“循环”，但它的顺序本质上是固定的，而且是数值升序的循环。
+
+### 注意点
+
+- 当开启APP但是没有进入APP修改过按键时是按照普通按键流程来的
+- 改过之后就会按照RCSP按键流程
+- 公共消息无所谓
+
+`apps\common\third_party_profile\jieli\rcsp\server\functions\rcsp_setting_opt\settings\adv_key_setting.c`
+
+```c
+/**
+ * rcsp按键配置转换
+ *
+ * @param value 按键功能
+ * @param msg 按键消息
+ *
+ * @return 是否拦截消息
+ */
+int rcsp_key_event_remap(int *msg)
+{
+    y_printf("%s() %d", __func__, __LINE__);
+#if _APP_KEY_CALL_ENABLE
+    //通话状态下不进行拦截，因为APP中不涉及有关通话相关的自定义按键
+    //避免出现来电时普通转换流程是单机接听，但是被RCSP拦截转换为了单击语音助手
+    if((bt_get_call_status() == BT_CALL_INCOMING) || (bt_get_call_status() == BT_CALL_OUTGOING) || (bt_get_call_status() == BT_CALL_ACTIVE)){
+        //此时不拦截，走普通按键转换APP层消息流程
+        y_printf("RCSP检测到通话状态不拦截/n");
+        return -1;
+    }
+#endif
+
+    //参照普通按键流程，从机直接返回
+    if (tws_api_get_role() == TWS_ROLE_SLAVE) {
+        //这里从机是直接返回的，那么所有的按键消息都是在主耳处理的。
+        return -1;
+    }
+
+    //当开启rcsp时，没有进入APP改过按键的话，也不会走RCSP流程！！！
+    if (0 == get_adv_key_event_status()) {
+        y_printf("disable_adv_key_event/n");
+        return -1;
+    }
+```
+
 # 关于触摸元器件
 
 - 机器有突出部分的，加上外壳，需要导电布或铜箔才能有触摸。
@@ -4084,3 +4214,33 @@ Flash UUID    : 42 50 32 34 39 38 32 14 00 58 47 44 47 03 D5 78
 ```
 
 - 8的倍数。
+
+# 上电不手动开机以及关机有抖动
+
+- 看日志被反复唤醒
+
+设备在通电状态下（无手动开机操作）确实存在反复唤醒的现象，但每次唤醒后很快又进入关机流程，导致“唤醒不成功”（即无法进入正常工作状态）。
+
+从日志的[WOKUP]和[PMU]模块看，唤醒源非常明确且一致：
+
+- 主要唤醒源：
+  - "[WKUP]PWR_WK_REASON_P11"：P11是电源管理子系统（可能是P11 MCU或电源芯片），表示P11检测到电源事件（如电压变化或定时器）。
+  - "[WKUP]PWR_WK_REASON_LPCTMU"：这是低功耗触摸模块（Low Power Capacitive Touch Management Unit）的唤醒原因。LPCTMU是用于触摸键检测的低功耗外围模块，在关机/待机状态下保持活跃（日志中"[PMU]sf_keep_lpctmu: 1" 表示软关机时保留LPCTMU功能）。
+- 唤醒值：
+  - "wakeup_source_value0: 0x6"（二进制00000110），这可能对应多个位：bit1 (LPCTMU) + bit2 (P11)。
+  - "p33_wkup_src : 0x100"：P33是另一个电源子模块，0x100表示特定唤醒通道（可能与LPCTMU相关）。
+- 重置源：
+  - "reset_source_value: 0x10010020"：表示软重置（MSYS_P2M_RST 和 P11/P33 POWER_RETURN），不是硬重置（如低电压或看门狗）。这确认是软关机后的唤醒，而不是崩溃重启。
+- LP_KEY模块的证据：
+  - 每次初始化时都有"[LP_KEY]lp_touch_key_init >>>>"，并读取VM（可能是虚拟内存或配置）中的算法参数。
+  - 在第一个序列中，有触摸读数变化："[LP_KEY]ch:4 res:4631 cur:3 net:4" 和 "[LP_KEY]ch:4 res:5711 cur:4 net:3"（ch=channel通道，res=resistance电阻值，cur=current当前水平，net=net差值）。这表明LPCTMU检测到触摸通道（channel 4）的电容/电阻变化，可能触发唤醒中断。
+  - 配置：LPCTMU使用DMA模式，通道启用（CHEN=0x10），中断启用（P2M_INT_IE=0x1）。在软关机前，还保存了algo param（"[LP_KEY]save algo param"），确保下次唤醒时参数保留。
+  - 校准过程：日志显示LPCTMU在自适应校准电流水平（cur_level=3, diff=183），并测试不同电压/时钟（lv_vol=393mv, hv_vol=1136mv 等）。这暗示它在低功耗模式下敏感于外部干扰。
+
+**总结唤醒原因**：设备在软关机状态下，LPCTMU模块保持活跃，用于监听触摸事件（如开机按键）。但由于无手动开机，可能是**误触发或噪声**导致LPCTMU反复检测到“触摸”事件，唤醒P11/P33子系统，进入初始化。但初始化后，应用逻辑判断条件不满足（见下文），又关机，形成循环。
+
+![image-20260122182050232](./可视化SDK问题.assets/image-20260122182050232.png)
+
+- 关闭即可。
+- 触摸模块低功耗待机时太灵敏，会多一些功耗。
+

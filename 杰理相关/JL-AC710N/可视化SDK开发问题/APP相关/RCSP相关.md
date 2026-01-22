@@ -327,5 +327,97 @@ static RCSP_SETTING_OPT adv_key_opt = {
 REGISTER_APP_SETTING_OPT(adv_key_opt);
 ```
 
+# RCSP按键与普通按键映射流程
+
+`apps\earphone\app_main.c`
+
+```c
+int app_get_message(int *msg, int max_num, const struct key_remap_table *key_table)
+{
+    const struct app_msg_handler *handler;
+
+    app_core_get_message(msg, max_num);
+
+    //消息截获,返回1表示中断消息分发
+    for_each_app_msg_prob_handler(handler) {
+        if (handler->from == msg[0]) {
+            int abandon = handler->handler(msg + 1);
+            if (abandon) {
+                return 0;
+            }
+        }
+    }
+#if RCSP_ADV_KEY_SET_ENABLE
+    if (msg[0] == MSG_FROM_KEY) {
+        int _msg = rcsp_key_event_remap(msg + 1);
+        //出来时已经能得到APP层的映射消息了
+        if (_msg != -1) {
+            msg[0] = MSG_FROM_APP;
+            msg[1] = _msg;
+            log_info("rcsp_key_remap: %d\n", _msg);
+        }
+    }
+#endif
+
+    if (msg[0] == MSG_FROM_KEY && key_table) {
+        /*
+         * 按键消息映射成当前模式的消息
+         */
+        struct app_mode *mode = app_get_current_mode();
+        if (mode) {
+#if TCFG_AUDIO_WIDE_AREA_TAP_ENABLE
+            audio_wide_area_tap_ignore_flag_set(1, 1000);
+#endif
+            int key_msg = app_key_event_remap(key_table, msg + 1);
+            log_info(">>>>>key_msg = %d\n", key_msg);
+            if (key_msg == APP_MSG_NULL) {
+                return 1;
+            }
+            msg[0] = MSG_FROM_APP;
+            msg[1] = key_msg;
+#if TCFG_APP_KEY_DUT_ENABLE
+            app_key_dut_msg_handler(key_msg);
+#endif
+        }
+    }
+
+    return 1;
+}
+
+
+/**
+ * rcsp按键配置转换
+ *
+ * @param value 按键功能
+ * @param msg 按键消息
+ *
+ * @return 是否拦截消息
+ */
+int rcsp_key_event_remap(int *msg)
+{
+    y_printf("%s() %d", __func__, __LINE__);
+#if _APP_KEY_CALL_ENABLE
+    //通话状态下不进行拦截，因为APP中不涉及有关通话相关的自定义按键
+    //避免出现来电时普通转换流程是单机接听，但是被RCSP拦截转换为了单击语音助手
+    if((bt_get_call_status() == BT_CALL_INCOMING) || (bt_get_call_status() == BT_CALL_OUTGOING) || (bt_get_call_status() == BT_CALL_ACTIVE)){
+        //此时不拦截，走普通按键转换APP层消息流程
+        y_printf("RCSP检测到通话状态不拦截/n");
+        return -1;
+    }
+#endif
+
+    //参照普通按键流程，从机直接返回
+    if (tws_api_get_role() == TWS_ROLE_SLAVE) {
+        //这里从机是直接返回的，那么所有的按键消息都是在主耳处理的。
+        return -1;
+    }
+
+    //当开启rcsp时，没有进入APP改过按键的话，也不会走RCSP流程！！！
+    if (0 == get_adv_key_event_status()) {
+        y_printf("disable_adv_key_event/n");
+        return -1;
+    }
+```
+
 
 

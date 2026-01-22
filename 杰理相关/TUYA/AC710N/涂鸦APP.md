@@ -3496,6 +3496,31 @@ ppppppppppppppppppppppppp
     }
 ```
 
+# BUG:产测失效
+
+- 客户的仪器进不去ANC降噪
+- 自己这边也无法通过ANC在线调试工具打开
+  - 不带APP的可以打开（可能是某个第三方协议）
+
+`apps\common\config\include\bt_profile_cfg.h`
+
+```c
+///---sdp service record profile- 用户选择支持协议--///
+#if (BT_FOR_APP_EN \
+    || APP_ONLINE_DEBUG \
+    || (THIRD_PARTY_PROTOCOLS_SEL & (GFPS_EN | REALME_EN | TME_EN | DMA_EN | GMA_EN | MMA_EN | FMNA_EN | ONLINE_DEBUG_EN | CUSTOM_DEMO_EN | XIMALAYA_EN)))
+#if ((THIRD_PARTY_PROTOCOLS_SEL & LL_SYNC_EN) || (THIRD_PARTY_PROTOCOLS_SEL & TUYA_DEMO_EN))
+#undef TCFG_BT_SUPPORT_SPP
+#define TCFG_BT_SUPPORT_SPP    1//开涂鸦时也强行打开SPP
+#else
+#undef TCFG_BT_SUPPORT_SPP
+#define TCFG_BT_SUPPORT_SPP    1
+#endif
+#endif
+```
+
+
+
 # BUG
 
 - 双耳连接，单耳入仓，APP会立马断开，后面会回连。
