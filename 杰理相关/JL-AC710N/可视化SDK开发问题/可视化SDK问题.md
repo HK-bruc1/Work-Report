@@ -2950,6 +2950,8 @@ APP_MSG_HANDLER(sniff_btstack_msg_stub) = {
 
 在有关调用`sys_auto_sniff_controle`d的地方，还可以加功放的开启与关闭。
 
+## 带APP连接待机一边不进低功耗
+
 # 充电下拉电阻
 
 ![image-20250909103510822](./可视化SDK问题.assets/image-20250909103510822.png)

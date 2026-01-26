@@ -168,3 +168,88 @@ int rcsp_make_set_adv_data(void)
 16M足够了，F6的。改一下可视化工具配置。
 
 OTA软件APP后台一般只能上传一个软件，意味着只能出一个软件。如果分左右的话，APP升级后两个耳机变成了同一个声道！就会出现声道错乱。一般都是硬件上给一个下拉电阻做左右区分。
+
+- 智能仓也可以
+- 都没有的话，选择测试盒配对但是需要代码写死不能擦除声道信息，回复出厂信息不清除对耳信息。
+
+## 普通仓单软件OTA没有硬件区分
+
+- 选择测试盒配对但是需要代码写
+  - 死不能擦除声道信息即回复出厂信息不清除对耳信息。
+  - 不擦除VM。
+
+`apps\earphone\board\br36\board_ac700n_demo_global_build_cfg.h`
+
+```c
+//with single-bank mode,actual vm size should larger this VM_LEAST_SIZE,and dual bank mode,actual vm size equals this;
+//config whether erased this area when do a update,1-No Operation,0-Erase
+#define CONFIG_VM_OPT							1
+```
+
+
+
+# 通过自定义协议删减APP中的功能栏目
+
+还是回复了APP，不管数据是否对，这一些功能都打开了。。。
+
+`apps\common\third_party_profile\jieli\rcsp\server\rcsp_cmd_recieve.c`
+
+```c
+void rcsp_cmd_recieve(void *priv, u8 OpCode, u8 OpCode_SN, u8 *data, u16 len, u16 ble_con_handle, u8 *spp_remote_addr)
+    case JL_OPCODE_CUSTOMER_USER:
+#if 0//YUANSHANG_APP_ENABLE
+        dhf_rcsp_user_cmd_recieve(priv, OpCode, OpCode_SN, data, len, ble_con_handle, spp_remote_addr);//不进行任何回复
+#else
+        rcsp_user_cmd_recieve(priv, OpCode, OpCode_SN, data, len, ble_con_handle, spp_remote_addr);
+#endif
+        break;
+
+//屏蔽就好了。。。
+void dhf_rcsp_user_cmd_recieve(void *priv, u8 OpCode, u8 OpCode_SN, u8 *data, u16 len, u16 ble_con_handle, u8 *spp_remote_addr)
+{
+    u8 i = 0;
+    int ret = 0;
+    //自定义数据接收
+    rcsp_printf("%s:", __FUNCTION__);
+    rcsp_put_buf(data, len);
+    if (tws_api_get_role() == TWS_ROLE_SLAVE) {
+        return;
+    }
+#if  YUANSHANG_APP_ENABLE
+    if (data[1] != 0xFF) {
+        return;
+    }
+    if (data[2] == 0xFF) { //APP查询耳机状态
+        
+    } else { //app控制耳机
+        switch (data[0]) {
+            case 0xFE: //恢复出厂设置
+                if (data[2] == 0x00) { //恢复出厂设置
+                    if (get_bt_tws_connect_status()) {
+                        bt_tws_sync_moed(data);
+                    } else {
+                        if (bt_get_connect_status() >=  BT_STATUS_CONNECTING) {
+                            bt_cmd_prepare(USER_CTRL_DISCONNECTION_HCI, 0, NULL);
+                            os_time_dly(100);
+                        }
+                        bt_cmd_prepare(USER_CTRL_DEL_ALL_REMOTE_INFO, 0, NULL);
+                    // #if TCFG_USER_TWS_ENABLE
+                    //     bt_tws_remove_pairs();
+                    // #endif
+                        rcsp_setting_info_reset();
+                        os_time_dly(50);
+                        sys_enter_soft_poweroff(POWEROFF_NORMAL);
+                    }
+                }
+                break;
+        }
+    }
+    dhf_send_crtl_app_data(data[0], data[1], data[2]);
+#endif
+
+    JL_CMD_response_send(OpCode, JL_PRO_STATUS_SUCCESS, OpCode_SN, NULL, 0, ble_con_handle, spp_remote_addr);
+}
+```
+
+- 剩下EQ，按键，修改名称，OTA升级。
+
