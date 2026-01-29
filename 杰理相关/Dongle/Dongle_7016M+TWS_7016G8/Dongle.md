@@ -777,6 +777,184 @@ clean_ac710n_audio_adapter:
 4. 把延迟设定为40ms，则样机整机也能稳定在40ms左右播放，所以需要放宽一下延迟留一些余量；
 5. 另外软件上开启tws配对超时后配对新耳机，或者一拖二连接等，开启蓝牙page或者page scan这些操作的话，也会占用蓝牙带宽，影响一点播歌收数，根据实际需求测试取舍
 
-## 普通按键UI在dongle使用时会有问题？？？
+## 普通按键UI在dongle使用时会有问题
 
 - 双击分开左右功能，不连接dongle正常，但是链接dongle后双击右边功能对不上。
+
+耳机看打印正常执行，估计是dongle转发有问题，`APP_MSG_MUSIC_PP`表现为下一曲。
+
+### dongle打印
+
+#### 右边
+
+暂停触发PP
+
+```c
+[00:08:27.111]get AVCTP_OPID_PLAY
+
+[00:08:27.112][EDR_CONN_PLAY]No evtent handler:32
+[00:08:27.113][SNIFF] BT_STATUS_SNIFF_STATE_UPDATE 0
+[00:08:27.114][SNIFF]emitter sniff depend remoter
+[00:08:27.115][DEFAULT_MSG]unknow_msg=0x100003
+[00:08:27.116][DONGLE]bt_connction_status_event_handler,bt_event= 40
+[00:08:27.118][DONGLE]BT_STATUS_AVRCP_INCOME_OPID: 0x44
+[00:08:27.119][EDR_CONN_PLAY]dual_conn_btstack_event_handler,40
+[00:08:27.121][EDR_CONN_PLAY]++++++++ BT_STATUS_AVRCP_INCOME_OPID +++++++++  
+[00:08:27.124][VOL_SYNC]usb_type 2: 44,0
+[00:08:27.125][VOL_SYNC]OPID_PP
+[00:08:27.127][VOL_SYNC]usb_type 2: 44,0
+[00:08:27.128][VOL_SYNC]OPID_PP
+[00:08:27.131][DEFAULT_MSG]unknow_msg=0x100003
+[00:08:27.133][BT_APP_MSG]bt_app_msg, type:94
+[00:08:27.134][BT_APP_MSG]unknow msg type:94
+[00:08:27.135][EDR_CONN_PLAY]APP_MSG_STATUS EMMTIER:94
+[00:08:27.136][DEFAULT_MSG]default,app_msg=94
+[00:08:27.137][USB]hid_tx_key:0008
+[00:08:27.158][USB]hid_tx_key:0000
+[00:08:27.177][USB]hid_tx_key:0008
+[00:08:27.197][USB]hid_tx_key:0000
+[00:08:27.290]tx_afh_conn:4194c4
+[00:08:27.291][LMP]TX_SET_AFH_REQ: 2, c62c2
+
+EB 40 D0 DD 89 79 58 28 B2 45 
+[00:08:28.166][USB]uac_speaker_stream_open
+[00:08:28.167][USB]>> Case : USB_AUDIO_PLAY_OPEN
+[00:08:28.168][USB]----------- Call pc_spk_set_fmt, bit:24, sr:48000
+[00:08:28.169][USB]func;usb_g_set_ep_unmask() ep:0x3
+[00:08:28.174][BT_APP_MSG]bt_app_msg, type:82
+[00:08:28.175][BT_APP_MSG]unknow msg type:82
+[00:08:28.176][SOURCE_USB]APP_MSG_PC_AUDIO_PLAY_OPEN: uac_id: 0
+[00:08:28.177][DONGLE]APP_DG_MSG_PC_AUDIO_PLAY_OPEN
+[00:08:28.179][EDR_CONN_PLAY]APP_MSG_STATUS EMMTIER:82
+[00:08:28.180][DEFAULT_MSG]default,app_msg=82
+[00:08:28.181][BT_APP_MSG]bt_app_msg, type:210
+[00:08:28.182][BT_APP_MSG]unknow msg type:210
+[00:08:28.183][EDR_CONN_PLAY]APP_MSG_APP_USB_PLAY_OPEN bit_width: 1
+[00:08:28.185][EDR_CONN_PLAY]dongle_edr_media_control, mode 0, pp 1, call_st 5
+[00:08:28.187][EDR_CONN_PLAY]a2dp_pp input= 1
+[00:08:28.188][EDR_CONN_PLAY]a2dp_pp:1, is_priv_conn:1
+[00:08:28.189][EDR_CONN_PLAY]sample_rate: 44100
+[00:08:28.191][EDR_CONN_PLAY]bit_pool:38
+[00:08:28.192][SOURCE_USB]open uac spk player >>> a2dp_tx, uac_id: 1
+[00:08:28.193][SOURCE_USB]>>> uac0
+[00:08:28.194][CLOCK]---sys clk set : 240000000
+[00:08:28.196][CLOCK]---SYSPLL EN : 1
+[00:08:28.196][CLOCK]---D_PLL EN  : 0
+[00:08:28.197][CLOCK]---HSB CLK : 240000000
+[00:08:28.197][CLOCK]---LSB CLK : 24000000
+[00:08:28.198][CLOCK]---SFC CLK : 96000000
+[00:08:28.198][CLOCK]---HSB_PLL_DIV : 1 * 1
+[00:08:28.199][CLOCK]---LSB_PLL_DIV : 1 * 1
+[00:08:28.199][CLOCK]---SFC_DIV : 0
+[00:08:28.200][CLOCK]--SYS DVDD  adaptive:15 SFR:15 -> DVDD_VOL_129V  @ 1278mv
+[00:08:28.201][CLOCK]--SYS RVDD  adaptive:15 SFR:15 -> RVDD_VOL_129V  @ 1297mv
+[00:08:28.202][CLOCK]--SYS DCVDD adaptive:9 SFR:9 -> DCVDD_VOL_145V @ 1439mv
+[00:08:28.203][CLOCK]---RANGE    : 7 / 0
+[00:08:28.203]pipeline_uuid: 81fa
+
+[00:08:28.204][CLOCK]---sys clk set : 240000000
+[00:08:28.206][SYNCTS]syncts ch 2
+[00:08:28.207][SYNCTS]syncts ch 2
+[00:08:28.207][SYNCTS]syncts ch 2
+[00:08:28.207][SYNCTS]syncts ch 2
+[00:08:28.208][SYNCTS]syncts ch 2
+[00:08:28.208][SYNCTS]syncts ch 2
+[00:08:28.209][SYNCTS]syncts ch 2
+[00:08:28.209][SYNCTS]syncts ch 2
+[00:08:28.210][STREAM]format negotiation: suss
+  { source,             48000, 2 ch, 16bit }
+  { play_sync,          44100, 2 ch, 16bit }
+  { a2dp_tx,            44100, 2 ch, 16bit }
+[00:08:28.212][SYNCTS]audio_syncts_node_start bit_wide, 0 0 15
+[00:08:28.213][SYNCTS]sync network 0
+[00:08:28.213][SYNCTS]audio syncts node start config397397: 0,  2, 48000, 44100
+[00:08:28.215][w]media_malloc,module:9,size:84
+[00:08:28.215]convert_data_ioc_start bit_wide, 0 0 15
+[00:08:28.216][EDR_CONN_PLAY]Private conn, set low latency!!!
+[00:08:28.217][EDR_CONN_PLAY]Private conn, set low latency!!!
+[00:08:28.217]a2dp tx packet size : 754
+
+[00:08:28.218][EDR_CONN_PLAY]AVDTP open...
+
+B6 A5 5A 6D BF 5E 
+[00:08:28.219][DEFAULT_MSG]default,app_msg=210
+[00:08:28.220][BT_APP_MSG]bt_app_msg, type:225
+[00:08:28.221][BT_APP_MSG]unknow msg type:225
+[00:08:28.222][EDR_CONN_PLAY]APP_MSG_STATUS EMMTIER:225
+[00:08:28.223][SYNCTS]sync first ts 3378259968 
+[00:08:28.224][DEFAULT_MSG]default,app_msg=225
+[00:08:28.226]REP_AVDTP_START
+[00:08:28.226][DONGLE]bt_connction_status_event_handler,bt_event= 56
+[00:08:28.227][DONGLE]BT STATUS DEFAULT:56
+[00:08:28.228][EDR_CONN_PLAY]dual_conn_btstack_event_handler,56
+[00:08:28.230][EDR_CONN_PLAY]++++++++ BT_STATUS_AVDTP_START +++++++++  
+[00:08:28.231][DEFAULT_MSG]unknow_msg=0x100003
+[00:08:28.289]tx_afh_conn:4194c4
+[00:08:28.290][LMP]TX_SET_AFH_REQ: 2, c6902
+
+E9 40 D0 DD 89 39 58 28 32 45 
+[00:08:29.289]tx_afh_conn:4194c4
+[00:08:29.290][LMP]TX_SET_AFH_REQ: 2, c6f42
+```
+
+播放触发PP
+
+```c
+[00:07:18.511]get AVCTP_OPID_PAUSE
+[00:07:18.512][DONGLE]bt_connction_status_event_handler,bt_event= 40
+[00:07:18.512][DONGLE]BT_STATUS_AVRCP_INCOME_OPID: 0x46
+[00:07:18.513][DONGLE]Auto sync avdtp status to remote...
+[00:07:18.515][EDR_CONN_PLAY]dual_conn_btstack_event_handler,40
+[00:07:18.516][EDR_CONN_PLAY]++++++++ BT_STATUS_AVRCP_INCOME_OPID +++++++++  
+[00:07:18.517][VOL_SYNC]usb_type 2: 46,0
+[00:07:18.517][VOL_SYNC]OPID_PP
+[00:07:18.518][DEFAULT_MSG]unknow_msg=0x100003
+[00:07:18.519][USB]hid_tx_key:0008
+[00:07:18.526][VOL_SYNC]usb_type 2: 46,0
+[00:07:18.526][VOL_SYNC]OPID_PP
+[00:07:18.529]Auto open remote avdtp start...
+[00:07:18.540][USB]hid_tx_key:0000
+[00:07:18.560][USB]hid_tx_key:0008
+[00:07:18.580][USB]hid_tx_key:0000
+[00:07:19.289]tx_afh_conn:4194c4
+[00:07:19.289][LMP]TX_SET_AFH_REQ: 2, ab9c0
+
+64 21 54 1A 0D 23 40 21 28 00 
+[00:07:20.288]tx_afh_conn:4194c4
+[00:07:20.289][LMP]TX_SET_AFH_REQ: 2, ac000
+
+24 21 54 36 05 21 48 21 28 00 
+[00:07:20.386][LMP]LMP_POWER_CONTROL_REQ
+[00:07:20.386][LINK]pwr_set=0,3,2,255,3
+[00:07:20.479]Current free heap 233544 bytes, minimum ever free heap 224008 bytes, physics memory size 147200 bytes
+[00:07:20.510][EDR_CONN_PLAY]>>>establish_conn: 0x12
+[00:07:21.289]tx_afh_conn:4194c4
+[00:07:21.289][LMP]TX_SET_AFH_REQ: 2, ac640
+```
+
+正常三击下一曲
+
+```c
+[00:10:05.290]tx_afh_conn:4194c4
+[00:10:05.290][LMP]TX_SET_AFH_REQ: 2, ec742
+
+E8 70 10 C4 90 41 62 08 21 26 
+[00:10:05.401][DONGLE]bt_connction_status_event_handler,bt_event= 40
+[00:10:05.403][DONGLE]BT_STATUS_AVRCP_INCOME_OPID: 0x4b
+[00:10:05.404][EDR_CONN_PLAY]dual_conn_btstack_event_handler,40
+[00:10:05.405][EDR_CONN_PLAY]++++++++ BT_STATUS_AVRCP_INCOME_OPID +++++++++  
+[00:10:05.406][DEFAULT_MSG]unknow_msg=0x100003
+[00:10:05.413][VOL_SYNC]usb_type 2: 4b,0
+[00:10:05.414][VOL_SYNC]OPID_NEXT
+[00:10:05.415][USB]hid_tx_key:0008
+[00:10:05.436][USB]hid_tx_key:0000
+[00:10:05.455][USB]hid_tx_key:0008
+[00:10:05.475][USB]hid_tx_key:0000
+[00:10:05.480]Current free heap 235408 bytes, minimum ever free heap 224008 bytes, physics memory size 148992 bytes
+[00:10:05.509][EDR_CONN_PLAY]>>>establish_conn: 0x12
+[00:10:05.518][LMP]LMP_POWER_CONTROL_REQ
+[00:10:05.519][LINK]pwr_set=0,3,2,255,3
+[00:10:06.290]tx_afh_conn:4194c4
+[00:10:06.290][LMP]TX_SET_AFH_REQ: 2, ecd82
+```
+
