@@ -1362,6 +1362,11 @@ void charge_ldo5v_off_deal(void)
 #endif
 ```
 
+## 呼吸灯在ANC状态下会有灯噪
+
+1. 去掉呼吸灯
+2. 如果还有就是硬件问题，无法解决！！！
+
 # DUT
 
 `bt_key_power_msg_remap`创建按键事件触发后的DUT函数
@@ -2002,257 +2007,55 @@ int bt_mode_init()
     }
 ```
 
-## 可视化工具中提示音音量合适，但是siri提示音还是很大
+## 可视化工具中提示音音量合适，但是siri提示音还是很大？？？
 
-### 日志
+- Siri的提示音跟通话音量是一起的，意味着只能调通话音量了。。。
 
-```c
-[00:01:31.811]rcsp_key_event_remap() 313
-[00:01:31.812]get_adv_key_event_status() 109
-[00:01:31.813]RCSP:KEY_ACTION_CLICK---->RCSP_KEY_ACTION_CLICK
+### 固定通话音量位置
 
-[00:01:31.814]get_adv_key_opt() 223
-[00:01:31.814]RCSP:RCSP_ADV_KEY_TYPE_SIRI---->APP_MSG_OPEN_SIRI
-//....
-[00:01:32.313][EARPHONE] BT_STATUS_SIRI_RECOGNITION:2 
-[00:01:32.313]tws_esco_play_in_task=8
-
-[00:01:32.314]ui_bt_stack_msg_handler:37
-[00:01:32.320][EARPHONE] BT STATUS DEFAULT
-[00:01:32.320]bt_dual_phone_call_msg_handler phone_event:14
-[00:01:32.321]A2DP BT_STATUS_PHONE:14
-
-67 F8 58 B3 CC A4 
-[00:01:32.322]dual_conn_btstack_event_handler:14
-[00:01:32.322][EARPHONE]BT_STATUS_PHONE_OUT
-
-67 F8 58 B3 CC A4 
-[00:01:32.323]tws_esco_play_in_task=4
-
-[00:01:32.324]ui_bt_stack_msg_handler:14
-[00:01:32.324]BT_STATUS_PHONE_ACTIVE
-[00:01:32.330][EARPHONE] BT STATUS DEFAULT
-[00:01:32.330]bt_dual_phone_call_msg_handler phone_event:15
-[00:01:32.331]dual_conn_btstack_event_handler:15
-[00:01:32.332][EARPHONE]BT_STATUS_PHONE_ACTIVE
-[00:01:32.332][EARPHONE]second_phone_call_ring_stop
-[00:01:32.333]tws_esco_play_in_task=10
-
-[00:01:32.333][EARPHONE]bt_phone_outband_ring_stop
-[00:01:32.334]tws_esco_play_in_task=6
-
-[00:01:32.335]lmp_private_esco_suspend_resume=0x4
-
-[00:01:32.335][LMP]why NULL 44444
-[00:01:32.336]phone_active:12
-
-[00:01:32.336]set_vol[idle]:call=12
-[00:01:32.337]ui_bt_stack_msg_handler:15
-[00:01:32.337][LED_UI]MSG_FROM_BT_STACK----ui_bt_stack_msg_handler----BT_STATUS_PHONE_HANGUP----BT_STATUS_A2DP_MEDIA_START----BT_STATUS_PHONE_ACTIVE
-[00:01:32.339]BT_STATUS_PHONE_ACTIVEEEE
-[00:01:32.347][LMP]LMP_MAX_SLOT=419c04,48,1@%
-[00:01:32.501][LMP]LMP_ESCO_LINK_REQ=419c04
-[00:01:32.502][LMP]esco_negotiation: Wsco 4,T_sco=12, Max:4,lt_addr 2
-[00:01:32.503][LMP]accepted_esco_link
-[00:01:32.504][LMP]LMP_POWER_CONTROL_REQ
-[00:01:32.504][LINK]pwr_set=0,3,0,255,9
-[00:01:32.505][LMP]LMP_EVENT_ESCO_LINK_SETUP
-[00:01:32.505]check_esco_link_setup ok
-
-[00:01:32.506][LMP]esco_link_setup:core_s.handle=48,link_type=2, air_mode=3, lt_addr=2, 
-             tws_lt_addr=0, D_sco=4, T_sco=12, W_sco=4, packet_len_m2s=60,timing_flag=2
-[00:01:32.508]m_open:41ee74,
-[00:01:32.508][LINK]pwr_set=0,4,2,255,9
-[00:01:32.509]creat p_esco over:link_type=2,air_mode=3,lt_addr=2,tws_lt_addr=0,D_sco=4,T_sco=12,W_sco=4,packet_len_m2s=60,clk=4a358a0
-[00:01:32.511][BDMGR]sort_1_edr
-edr 12 6 4 (48 8)
-[00:01:32.512][BDMGR]add_timing2: edr 1 132 6, 10
-[00:01:32.512][LMP]LMP_MAX_SLOT=419c04,48,5
-[00:01:32.513][LMP]LMP_MAX_SLOT_REQ=419c04,48,5
-[00:01:32.514]remove clear_siri_status_timer when esco open
-[00:01:32.515][EARPHONE] BT STATUS DEFAULT
-[00:01:32.515]bt_dual_phone_call_msg_handler phone_event:58
-[00:01:32.516]A2DP BT_STATUS_SCO_CONNECTION_REQ
-
-67 F8 58 B3 CC A4 
-[00:01:32.517]dual_conn_btstack_event_handler:58
-[00:01:32.518] BT_STATUS_SCO_CONNECTION_REQ
-67 F8 58 B3 CC A4 
-[00:01:32.518]ui_bt_stack_msg_handler:58
-[00:01:32.519]phone_sco_enable 946b160,946b160 
-[00:01:32.520]ok=0x121d5,121d5,243aa,1e9,181
-e
-[00:01:32.521][EARPHONE] BT STATUS DEFAULT
-[00:01:32.521][LMP]LMP_MAX_SLOT_REQ=419c04,48,3
-[00:01:32.522]bt_dual_phone_call_msg_handler phone_event:25
-[00:01:32.523]A2DP BT_STATUS_SCO_STATUS_CHANGE len:60, type:3
-[00:01:32.523]dual_conn_btstack_event_handler:25
-[00:01:32.524]BT_STATUS_SCO_STATUS_CHANGE len:60, type:3
-[00:01:32.525][EARPHONE]BT_STATUS_SCO_STATUS_CHANGE----call_vol = 15
-[00:01:32.525][LMP]LMP_MAX_SLOT_REQ=419c04,48,5
-[00:01:32.526][EARPHONE]BT_STATUS_SCO_STATUS_CHANGE----call_vol = 8
-[00:01:32.527]audio_state:idle->call,max_vol:15
-[00:01:32.528]dvol_max:16384
-[00:01:32.528]set_vol[call]:call=12
-[00:01:32.528][fade]state:call,max_volume:15,cur:12,12
-[00:01:32.529][LMP]LMP_MAX_SLOT_REQ=419c04,48,3
-[00:01:32.530]set_vol[call]:=12
-[00:01:32.530][SW_DVOL]Gain:12,AVOL:3,DVOL:16384
-[00:01:32.531]set_vol[call]:call=15
-[00:01:32.531][fade]state:call,max_volume:15,cur:15,15
-[00:01:32.532]set_vol[call]:=15
-[00:01:32.532][SW_DVOL]Gain:15,AVOL:3,DVOL:16384
-[00:01:32.533][EARPHONE]second_phone_call_ring_stop
-[00:01:32.534]tws_esco_play_in_task=10
-
-[00:01:32.534][EARPHONE]bt_phone_outband_ring_stop
-[00:01:32.535]tws_esco_play_in_task=1
-
-[00:01:32.536]<<<<<<<<<<<esco_dec_stat
-[00:01:32.536]Current free heap 238956 bytes, minimum ever free heap 222152 bytes, physics memory size 99328 bytes
-[00:01:32.537]bt_phone_esco_play:0 0 0
-[00:01:32.538][CLOCK]---sys clk set : 192000000
-[00:01:32.539]pipeline_uuid: ba11
-
-[00:01:32.539][CLOCK]---sys clk set : 192000000
-[00:01:32.540][JLSTREAM]create_stream: 41e050, 0
-[00:01:32.542][JLSTREAM]jlstream_multi_thread create:jlstream_0
-[00:01:32.544][P_MEM_C]Defrage disbale : 0 / 1
-[00:01:32.544][DAC]sample 16000
-[00:01:32.545][STREAM]format negotiation: suss
-  { source,             16000, 1 ch, 16bit }
-  { dac,                16000, 1 ch, 16bit }
-[00:01:32.547][DEC-MSBC]msbc_open_suss
-[00:01:32.548]vol_dB :15, 0
-[00:01:32.548]vol_2_gain: 15, 15, 16384
-[00:01:32.549]audio_state:call->call,max_vol:15
-[00:01:32.549]dvol_max:16384
-[00:01:32.550]set_vol[call]:call=15
-[00:01:32.550]vol_dB :15, 0
-[00:01:32.550]vol_2_gain: 15, 15, 16384
-[00:01:32.551][fade]state:call,max_volume:15,cur:15,15
-[00:01:32.552]set_vol[call]:=15
-[00:01:32.552][SW_DVOL]Gain:15,AVOL:3,DVOL:16384
-[00:01:32.553]aud_clock_alloc:EQ00(12000000)
-
-[00:01:32.554][CLOCK]---sys clk set : 192000000
-[00:01:32.554]convert_data_ioc_start bit_wide, 0 0 15
-[00:01:32.555]lmp_private_esco_suspend_resume=0x2
-
-[00:01:32.556][JLSTREAM]send_callback: app_core, event 8, err 0
-[00:01:32.558][DAC]>>>>>>>>>>>>add dac syncts 41e8c8
-[00:01:32.558][EARPHONE]tws_master open esco recoder
-[00:01:32.560][P_MEM_C]Defrage disbale : 0 / 1
-[00:01:32.560][DAC]__audio_dac_try_power_on
-[00:01:32.561]>>>>>>>>>>>>>>>>>> channel: 1
-[00:01:32.572]>> audio_common_power_open cur_status:0
-[00:01:32.694][DAC]delay set : 800, 40, 320
-U
-[00:01:32.694][DAC]audio_dac_fifo_start : 0x0, 15, DAC_CON = 0xf802f18a
-[00:01:32.695][fade]state:call,max_volume:15,cur:15,15
-[00:01:32.696]set_vol[call]:=15
-[00:01:32.696][SW_DVOL]Gain:15,AVOL:3,DVOL:16384
-[00:01:32.697]pipeline_uuid: ba11    
-```
-
-
-
-### siri调用链
-
-- `apps\earphone\mode\bt\tws_phone_call.c`
+- 相当于进通话时修改音量
+  - 开麦时，Siri唤出也是开麦。
+- 后续看看能不能隔离开单独设置Siri和接听通话的音量
 
 ```c
-    case BT_STATUS_SIRI_OPEN:
-    case BT_STATUS_SIRI_CLOSE:
-    case BT_STATUS_SIRI_GET_STATE:
-        /* case BT_STATUS_VOICE_RECOGNITION: */
-        log_info(" BT_STATUS_SIRI_RECOGNITION:%d \n", bt->value);
-        /* put_buf(bt, sizeof(struct bt_event)); */
-        app_var.siri_stu = bt->value;
+case CMD_PHONE_ACTIVE:
+	bt_phone_active(bt_addr);
+int bt_phone_active(u8 *bt_addr)
+{
+    if (g_bt_hdl.phone_call_dec_begin) {
+        log_info("call_active,dump_packet clear\n");
         esco_dump_packet = ESCO_DUMP_PACKET_DEFAULT;
-        tws_phone_call_send_cmd(CMD_PHONE_SIRI, bt->args, bt->value, 0);
-        break;
-    case BT_STATUS_SCO_CONNECTION_REQ :
-        g_printf(" BT_STATUS_SCO_CONNECTION_REQ");
-        put_buf(bt->args, 6);
-        break;
-    default:
-        log_info(" BT STATUS DEFAULT\n");
-        break;
+    }
+    if (g_bt_hdl.phone_ring_flag) {
+        g_bt_hdl.phone_ring_flag = 0;
+        tone_ring_player_stop();
+        if (g_bt_hdl.phone_timer_id) {
+            sys_timeout_del(g_bt_hdl.phone_timer_id);
+            g_bt_hdl.phone_timer_id = 0;
+        }
     }
 
+    lmp_private_esco_suspend_resume(4);
+    g_bt_hdl.phone_income_flag = 0;
+    g_bt_hdl.phone_num_flag = 0;
+    g_bt_hdl.phone_ring_sync_tws = 0;
+    /* g_bt_hdl.phone_con_sync_ring = 0; */
+#if _SET_FIXED_PHONE_VOL_ENABLE
+    g_bt_hdl.phone_vol = _SET_FIXED_PHONE_VOL_SCALE;
+    extern void phone_sync_vol();
+    phone_sync_vol();
+    //app_var.call_volume = 8;//不加这个似乎也可以每次都是固定百分比
+    bt_tws_sync_volume();
+#else
+    g_bt_hdl.phone_vol = _SET_DEFAULT_PHONE_VOL_SCALE;//这个比例不对，需要验证
+    bt_tws_sync_volume();
+#endif
+    r_printf("phone_active:%d\n", app_var.call_volume);
+    app_audio_set_volume(APP_AUDIO_STATE_CALL, app_var.call_volume, 1);
     return 0;
+
 }
-APP_MSG_HANDLER(bt_phone_msg_handler_stub) = {
-    .owner      = 0xff,
-    .from       = MSG_FROM_BT_STACK,
-    .handler    = bt_phone_status_event_handler,
-};
 ```
-
-- `apps\earphone\mode\bt\dual_a2dp_play.c`
-
-```c
-case BT_STATUS_PHONE_OUT:
-        printf("A2DP BT_STATUS_PHONE:%d\n", bt->event);
-        put_buf(bt->args, 6);
-#if !TCFG_A2DP_PREEMPTED_ENABLE
-        memset(g_a2dp_phone_call_addr, bt->args, 6);
-#endif
-        break;
-APP_MSG_HANDLER(a2dp_stack_msg_handler) = {
-    .owner      = 0xff,
-    .from       = MSG_FROM_BT_STACK,
-    .handler    = a2dp_bt_status_event_handler,
-};
-```
-
-- `apps\earphone\mode\bt\tws_phone_call.c`
-
-```c
-case BT_STATUS_PHONE_ACTIVE:
-    log_info("BT_STATUS_PHONE_ACTIVE\n");
-    #if SECONDE_PHONE_IN_RING_COEXIST
-    second_phone_call_ring_stop(outband_ring_bt_addr_get());
-    #endif
-    tws_phone_call_send_cmd(CMD_PHONE_ACTIVE, bt->args, 0, 1);
-    break;
-APP_MSG_HANDLER(bt_phone_msg_handler_stub) = {
-    .owner      = 0xff,
-    .from       = MSG_FROM_BT_STACK,
-    .handler    = bt_phone_status_event_handler,
-};
-
-case CMD_PHONE_ACTIVE:
-    bt_phone_active(bt_addr);//这里设置了一次音量
-    break;
-
-
-    case BT_STATUS_SCO_STATUS_CHANGE:
-        printf("BT_STATUS_SCO_STATUS_CHANGE len:%d, type:%d\n",
-               (bt->value >> 16), (bt->value & 0x0000ffff));
-        if (bt->value != 0xff) {
-#if (TCFG_LE_AUDIO_APP_CONFIG & LE_AUDIO_AURACAST_SINK_EN)
-            if (le_audio_player_is_playing()) {
-                le_auracast_stop();
-            }
-#endif
-            u8 call_vol = 15;
-            log_info("BT_STATUS_SCO_STATUS_CHANGE----call_vol = 15");
-            if(is_siri_open()){
-                call_vol = 8;
-                log_info("BT_STATUS_SCO_STATUS_CHANGE----call_vol = 8");
-            }            
-APP_MSG_HANDLER(bt_phone_msg_handler_stub) = {
-    .owner      = 0xff,
-    .from       = MSG_FROM_BT_STACK,
-    .handler    = bt_phone_status_event_handler,
-};            
-```
-
-- siri进来可以减小。
-- 来电电话也会进来，不知道这是什么音量。。。
-  - 通话流程也会进siri的判断中。。。。
 
 # 时钟频率
 
@@ -4551,4 +4354,8 @@ static void audio_effect_dev0_run(struct effect_dev0_node_hdl *hdl, s16 *data, u
 - 因为使用宏包含的，正向时在可视化工具删掉即可，不用删除代码。
 
 - 一般是切换降噪时，是通透效果。效果是相反的，所以需要ANC反向操作。
+
+# 蓝牙名名称长度上限
+
+
 

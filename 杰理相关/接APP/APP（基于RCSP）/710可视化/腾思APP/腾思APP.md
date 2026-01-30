@@ -303,50 +303,12 @@ static const u8 tab_section_num[] = {
 
 ## 带APP切回`eq_tab_normal`还能回到外部eq文件效果吗？
 
-## 使用APP切换均衡器效果
+## 使用APP切换均衡器效果日志
+
+## 使用APP切换均衡器效果调用链
 
 ```c
-[00:05:01.560]rcsp_common_function_set
-0C 04 01 F4 F0 00 F7 F6 07 07 F9 08 FF
-static bool rcsp_common_function_set(void *priv, u8 OpCode, u8 OpCode_SN, u8 *data, u16 len, u16 ble_con_handle, u8 *spp_remote_addr)
-{
-    printf("rcsp_common_function_set\n");
-    struct RcspModel *rcspModel = (struct RcspModel *)priv;
-    if (rcspModel == NULL) {
-        return false;
-    }
-    _OpCode = OpCode;
-    _OpCode_SN = OpCode_SN;
-    put_buf(data, len);
-    attr_set(priv, data, len, common_function_set_tab, RCSP_DEVICE_STATUS_ATTR_TYPE_MAX, ble_con_handle, spp_remote_addr);
-    if (rcspModel->err_code) {
-        rcspModel->err_code = 0;
-        return false;
-    }
-    return true;
-}
 
-static const attr_set_func common_function_set_tab[RCSP_DEVICE_STATUS_ATTR_TYPE_MAX] = {
-    [RCSP_DEVICE_STATUS_ATTR_TYPE_BATTERY 				          ] = NULL,
-    [RCSP_DEVICE_STATUS_ATTR_TYPE_VOL 					          ] = common_function_attr_vol_set,
-    [RCSP_DEVICE_STATUS_ATTR_TYPE_DEV_INFO 			          ] = NULL,
-    [RCSP_DEVICE_STATUS_ATTR_TYPE_ERROR_STATS			          ] = NULL,
-#if RCSP_ADV_EQ_SET_ENABLE
-    [RCSP_DEVICE_STATUS_ATTR_TYPE_EQ_INFO				          ] = common_function_attr_eq_set,
-#endif
-    
-    
-#if RCSP_ADV_EQ_SET_ENABLE
-static void common_function_attr_eq_set(void *priv, u8 attr, u8 *data, u16 len, u16 ble_con_handle, u8 *spp_remote_addr)
-{
-    RCSP_SETTING_OPT *setting_opt_hdl = get_rcsp_setting_opt_hdl(ATTR_TYPE_EQ_SETTING);
-    if (setting_opt_hdl) {
-        set_rcsp_opt_setting(setting_opt_hdl, data);
-        u32 mask = BIT(attr);
-        rcsp_msg_post(USER_MSG_RCSP_SET_EQ_PARAM, 2, (int)priv, mask);
-    }
-}
-#endif
 ```
 
 
@@ -462,4 +424,8 @@ void rscp_user_cmd_recv(void *priv, u8 OpCode, u8 OpCode_SN, u8 *data, u16 len, 
     }
 }
 ```
+
+# IOS自定义均衡器异常
+
+一调就跳到其他均衡器效果。
 
