@@ -4320,6 +4320,125 @@ Flash UUID    : 42 50 32 34 39 38 32 14 00 58 47 44 47 03 D5 78
 
 # 主动按键UI切换外部eq多效果？？？
 
+`apps\earphone\include\app_msg.h`
+
+```c
+    APP_MSG_EQ_SWITCH,
+```
+
+`apps\earphone\mode\bt\earphone.c`
+
+```c
+int bt_app_msg_handler(int *msg)
+{
+    if (!app_in_mode(APP_MODE_BT)) {
+        return 0;
+    }
+    switch (msg[0]) {
+    case APP_MSG_EQ_SWITCH:
+#if USER_EQ_SWITCH_EN
+        log_info("bt_app_msg_handler--APP_MSG_EQ_SWITCH\n");
+        dhf_eq_switch_deal();
+#endif  
+        return 0;
+
+extern void eq_effect_switch(u8 index);
+static void dhf_eq_switch_deal(void)
+{
+    if (get_tws_sibling_connect_state()) {
+        tws_api_sync_call_by_uuid('T', SYNC_CMD_EQ_SWITCH, 300);
+    } else {
+        eq_effect_switch(0xff);
+    }
+}            
+```
+
+`apps\earphone\mode\bt\bt_tws.c`
+
+```c
+/*
+ * 主从同步调用函数处理
+ */
+static void tws_sync_call_fun(int cmd, int err)
+{
+    log_d("TWS_EVENT_SYNC_FUN_CMD: %d\n", cmd);
+
+    switch (cmd) {
+    case SYNC_CMD_EQ_SWITCH:
+        extern void eq_effect_switch(u8 index);
+        eq_effect_switch(0xff);
+        break;
+    }
+}
+```
+
+`audio\effect\eq_config.c`
+
+```c
+#define CFG_FILE_MAX_EQ_NUM  2//有多少个EQ效果这里就填多少
+static u8 curr_eq_index = 0;
+u8 eq_switch_tws_flag = 0;
+int eq_effect_switch_num = 0;
+
+void eq_effect_switch(u8 index)
+{
+    //如果是oxff的话，就顺序切换
+    if(index == 0xff){
+        curr_eq_index++;
+    }else{
+        //否则按照指定下标
+        curr_eq_index = index;
+    }
+    //循环时不能超下标
+    if(curr_eq_index >= CFG_FILE_MAX_EQ_NUM){
+        curr_eq_index = 0;
+    }
+    printf("eq_effect_switch---------curr_eq_index:[%d]\r\n",curr_eq_index);
+    //第一次可以进来主耳根据下标去播放TWS同步提示音
+    if (!eq_switch_tws_flag) {
+        if (get_bt_tws_connect_status()) {
+            if (tws_api_get_role() == TWS_ROLE_MASTER) {
+                if (curr_eq_index == 0) {
+                    tws_play_tone_file_alone(get_tone_files()->normaleq,200);
+                } else if (curr_eq_index == 1) {
+                    tws_play_tone_file_alone(get_tone_files()->basseq,200);
+                }         
+            }
+        } else {
+            //单耳的话调用另外一个API实现。
+            if (curr_eq_index == 0) {
+                play_tone_file_alone(get_tone_files()->normaleq);
+            } else if (curr_eq_index == 1) {
+                play_tone_file_alone(get_tone_files()->basseq);
+            }
+        }
+    } else {
+        //第二次就不播提示音了？
+        eq_switch_tws_flag = 0;
+    }
+    
+    if (eq_effect_switch_num == 0) {
+        eq_effect_switch_num = sys_timeout_add(NULL, eq_effect_switch_callback_deal, 1000);
+    }
+}
+
+void eq_effect_switch_callback_deal(void *priv)
+{
+    printf("eq_effect_switch_callback_deal------------------\r\n");
+    //使用API去切换音乐eq节点的下标配置
+    eq_file_cfg_switch("MusicEqBt", curr_eq_index);
+    if (eq_effect_switch_num) {
+        sys_timeout_del(eq_effect_switch_num);
+        eq_effect_switch_num = 0;
+    }
+}
+```
+
+- `eq_effect_switch_num`
+- `eq_switch_tws_flag`
+
+这两个变量没啥作用啊，外部没有修改。直接根据下标循环切换节点音乐eq的配置文件就行。提示音可以使用TWS接口，切换时还是使用同步函数执行。
+
 # ANC反向
 
 加一个节点：
@@ -4355,7 +4474,7 @@ static void audio_effect_dev0_run(struct effect_dev0_node_hdl *hdl, s16 *data, u
 
 - 一般是切换降噪时，是通透效果。效果是相反的，所以需要ANC反向操作。
 
-# 蓝牙名名称长度上限
+# 蓝牙名名称长度上限？？？
 
 
 
