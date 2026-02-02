@@ -4318,7 +4318,7 @@ Flash UUID    : 42 50 32 34 39 38 32 14 00 58 47 44 47 03 D5 78
 
 
 
-# 主动按键UI切换外部eq多效果？？？
+# 主动按键UI切换外部eq多效果
 
 `apps\earphone\include\app_msg.h`
 
@@ -4475,6 +4475,12 @@ static void audio_effect_dev0_run(struct effect_dev0_node_hdl *hdl, s16 *data, u
 - 一般是切换降噪时，是通透效果。效果是相反的，所以需要ANC反向操作。
 
 # 蓝牙名名称长度上限？？？
+
+# RAM不够的现象
+
+## 带BLE以及按键音容易复位
+
+D8只增加flash不增加RAM。
 
 
 

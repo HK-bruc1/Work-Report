@@ -958,3 +958,25 @@ E8 70 10 C4 90 41 62 08 21 26
 [00:10:06.290][LMP]TX_SET_AFH_REQ: 2, ecd82
 ```
 
+### 暂停PP实际为下一曲修改dongle端
+
+`apps\dongle\adapter\mode\bt\edr\edr_conn_play.c`
+
+```c
+    case BT_STATUS_AVRCP_INCOME_OPID:
+        log_info("++++++++ BT_STATUS_AVRCP_INCOME_OPID +++++++++  \n");
+        if (event->value == AVCTP_OPID_PLAY) {
+            //emitter_rx_opid_deal(AVCTP_OPID_PLAY, 0);
+        } else if (event->value == AVCTP_OPID_PAUSE) {
+            //emitter_rx_opid_deal(AVCTP_OPID_PAUSE, 0);
+        }
+        break;
+```
+
+不连接dongle正常使用，那就是dongle的指令解析有问题。
+
+### 来电双击可以接听，但是无法挂断。三击无法拒接（实际表现为接听通话）。
+
+### 通话时候卡顿 但是耳机直接连接手机是不会的。
+
+### dongle模式下 声音比直接使用耳机声音还小很多。
