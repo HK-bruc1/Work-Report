@@ -425,7 +425,165 @@ void rscp_user_cmd_recv(void *priv, u8 OpCode, u8 OpCode_SN, u8 *data, u16 len, 
 }
 ```
 
-# IOS自定义均衡器异常
+# RCSP广播
 
-一调就跳到其他均衡器效果。
+`apps\common\third_party_profile\jieli\rcsp\adv\ble_rcsp_adv.c`
 
+```c
+    rcsp_bt_ble_adv_enable(0);
+    rcsp_make_set_adv_data();
+    rcsp_make_set_rsp_data();
+    rcsp_bt_ble_adv_enable(1);
+```
+
+## `rcsp_make_set_adv_data()` - 设置广播数据包（ADV Data）
+
+**作用**：生成并设置BLE的**主广播数据包**，包含设备的核心识别信息。
+
+**包含的关键信息**：
+
+- **厂商ID**（JL ID: 0x05D6）
+- **VID/PID**（设备型号识别）
+- **设备类型**（耳机/音箱/手表等）
+- **MAC地址**
+- **电量信息**（左耳、右耳、充电仓）
+- **连接状态标志**
+- **TWS配对状态**
+- **Hash校验码**（防伪验证）
+
+**特点**：
+
+- 固定31字节长度
+- **主动广播**，无需手机扫描即可接收
+- 包含快速识别设备所需的最小信息集
+
+## `rcsp_make_set_rsp_data()` - 设置扫描响应数据包（Scan Response）
+
+**作用**：生成并设置BLE的**扫描响应数据包**，补充广播包无法容纳的信息。
+
+**包含的关键信息**：
+
+- **设备名称**（通过 `bt_get_local_name()` 获取）
+- **FLAGS**（设备能力标志）
+
+**特点**：
+
+- 动态长度（取决于设备名称长度）
+- **被动响应**，只有当手机主动发起扫描请求（Scan Request）时才返回
+- 主要用于显示人类可读的设备名称
+
+## 在NRF Connect工具中的体现
+
+当你在NRF Connect中看到一个BLE设备时：
+
+| 数据包类型   | 对应函数                   | 你看到的内容                                       |
+| ------------ | -------------------------- | -------------------------------------------------- |
+| **ADV_IND**  | `rcsp_make_set_adv_data()` | 原始广播数据（Manufacturer Data，包含电量、MAC等） |
+| **SCAN_RSP** | `rcsp_make_set_rsp_data()` | 设备名称（Complete Local Name）                    |
+
+**查看方式**：
+
+- 点击设备后，**RAW** 标签页会显示两个数据包
+- **ADV** 部分 = `adv_data`（31字节）
+- **SCAN RSP** 部分 = `scan_rsp_data`（包含设备名）
+
+## 为什么要分开？
+
+1. **空间限制**：BLE 4.x 广播包最大31字节，无法同时容纳所有信息
+2. **省电优化**：主广播包高频发送，扫描响应包按需发送
+3. **快速识别**：手机可以先通过ADV包判断设备类型/电量，再决定是否获取完整名称
+
+## 异常分析
+
+### BLE名称没有超出限制日志
+
+```c
+[00:00:08.887]ADV data():
+1E FF D6 05 7E 51 03 21 22 D3 38 DF 6E 32 91 00 
+64 00 00 10 01 00 00 E0 C7 C9 01 5A 92 84 96 
+[00:00:08.889]rsp_data(31):
+02 01 0A 1B 09 44 45 56 49 41 20 55 4C 54 52 41 
+20 41 49 52 20 50 52 4F 2D 45 4D 34 31 30 00 
+
+[00:00:08.891]<error> [APP_BLE]app_ble_adv_enable 1 faild !
+```
+
+### BLE名称超出限制日志
+
+```c
+[00:00:02.842]ADV data():
+1E FF D6 05 7E 51 03 21 22 D3 38 DF 6E 32 91 00 
+64 00 00 10 01 00 00 E0 C7 C9 01 5A 92 84 96 
+[00:00:02.843]***rsp_data overflow!!!!!!
+[00:00:02.844]advertisements_setup_init fail !!!!!!
+[00:00:02.845]set_address_for_adv_handle:0
+
+91 32 6E DF 38 D3 
+```
+
+### 自动截断继续往下跑
+
+```c
+int rcsp_make_set_rsp_data(void)
+{
+    u8 offset = 0;
+    u8 *buf = scan_rsp_data;
+    const char *edr_name = bt_get_local_name();
+
+#if DOUBLE_BT_SAME_MAC || TCFG_BT_BLE_BREDR_SAME_ADDR
+    offset += make_eir_packet_val(&buf[offset], offset, HCI_EIR_DATATYPE_FLAGS, 0x0A, 1);
+#else
+    offset += make_eir_packet_val(&buf[offset], offset, HCI_EIR_DATATYPE_FLAGS, 0x06, 1);
+#endif
+
+    u8 name_len = strlen(edr_name) + 1;
+    //修改1：超长时自动截断，而不是返回失败
+    if (offset + 2 + name_len > ADV_RSP_PACKET_MAX) {
+        name_len = ADV_RSP_PACKET_MAX - offset - 2;  // 计算最大可用长度
+        puts("***rsp_data overflow, auto truncate!!!!!!\n");
+        // return -1;  // 删除这行，不再返回失败
+    }
+    offset += make_eir_packet_data(&buf[offset], offset, HCI_EIR_DATATYPE_COMPLETE_LOCAL_NAME, (void *)edr_name, name_len);
+    scan_rsp_data_len = offset;
+    log_info("rsp_data(%d):", offset);
+    log_info_hexdump(buf, offset);
+#if !TCFG_THIRD_PARTY_PROTOCOLS_SIMPLIFIED
+    app_ble_rsp_data_set(rcsp_server_ble_hdl, buf, 31);
+    app_ble_rsp_data_set(rcsp_server_ble_hdl1, buf, 31);
+#else
+    ble_op_set_rsp_data(offset, buf);
+#endif
+    return 0;
+}
+```
+
+### 是否可以加长
+
+- 31字节是BLE协议的硬性规定，不能加长！
+
+**BLE 4.0/4.1/4.2 - 严格31字节**
+
+- **技术原因：**
+  - 总包长最大 47 bytes
+  - MAC地址头 6 bytes
+  - PDU头 2 bytes
+  - **剩余 = 31 bytes**（这是协议栈能用的最大空间）
+
+**BLE 5.0 扩展广播（Extended Advertising）**
+
+- BLE 5.0引入了**扩展广播**，可以突破31字节限制：
+- **但有3个前提条件：**
+  1. ✅ **芯片支持** BLE 5.0
+  2. ✅ **手机支持** BLE 5.0（iOS 13+, Android 8+）
+  3. ✅ **代码启用** Extended Advertising
+
+### 最长多少
+
+**所有可见字符（包括字母、数字、空格、标点符号）都占用字节**。
+
+在 26 字节限制内，你需要计算：
+
+- 字母：每个 1 字节
+- 数字：每个 1 字节
+- **空格：每个 1 字节** ⬅️ 重点
+- 标点（-）：每个 1 字节
