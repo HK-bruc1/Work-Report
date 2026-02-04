@@ -2057,6 +2057,51 @@ int bt_phone_active(u8 *bt_addr)
 }
 ```
 
+## 同步来电铃声的情况下，苹果来电声音还是小
+
+`apps\earphone\mode\bt\tws_phone_call.c`
+
+```c
+case BT_STATUS_CALL_VOL_CHANGE:
+        //判断是当前地址的音量值才更新
+        u8 bt_esco_play[6];
+        int ret = esco_player_get_btaddr(bt_esco_play);
+        if (ret && memcmp(bt_esco_play, bt->args, 6) != 0) {
+            //如果有地址在是用esco音频，但跟传出来的值地址不一致，就不更新了。
+            break;
+        }
+        printf("call_vol:%d", bt->value);
+        u8 volume = bt->value;
+        u8 call_status = bt_get_call_status_for_addr(bt->args);
+
+#if TCFG_BT_INBAND_RING
+        if ((call_status != BT_CALL_ACTIVE) && (bt->value == 0)) {
+            printf("not set vol\n");
+            break;
+        }
+#endif
+
+        g_bt_hdl.phone_vol = bt->value;
+        if((call_status == BT_CALL_INCOMING)){
+            volume = 15;
+            //g_bt_hdl.phone_vol = 15;//好像没有作用，会不会影响通话音量不清楚。。。
+            app_audio_set_volume(APP_AUDIO_STATE_CALL, volume, 1);
+            bt_tws_sync_volume();
+        }
+        if ((call_status == BT_CALL_ACTIVE) ||
+            (call_status == BT_CALL_OUTGOING) || app_var.siri_stu) {
+            app_audio_set_volume(APP_AUDIO_STATE_CALL, volume, 1);
+            bt_tws_sync_volume();
+        } else {
+            /*
+             *只保存，不设置到dac
+             *微信语音通话的时候，会更新音量到app，但是此时的call status可能是hangup
+             */
+            app_var.call_volume = volume;
+        }
+        break;
+```
+
 # 时钟频率
 
 **函数整体功能**：根据音频管道名称返回对应的UUID

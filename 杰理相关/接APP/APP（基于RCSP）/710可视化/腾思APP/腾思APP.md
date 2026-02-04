@@ -315,6 +315,46 @@ static const u8 tab_section_num[] = {
 
 # 修改蓝牙名
 
+## 日志
+
+```c
+[00:01:26.093]JL_rcsp_adv_cmd_resp
+[00:01:26.093] JL_OPCODE_SET_ADV
+[00:01:26.094]JL_opcode_set_adv_info:
+07 01 38 37 36 35 34 33 
+[00:01:26.095]deal_bt_name_setting(58)ES<>wS<>w
+[00:01:26.153]att disconn
+[00:01:26.154][LE-RCSP]RCSP HCI_EVENT_DISCONNECTION_COMPLETE: 50
+ 
+[00:01:26.155][LE-RCSP]ble_work_st:21->5
+ 
+[00:01:26.156]get_update_flag:0
+[00:01:26.157][LE-RCSP])))))))) 1
+ 
+[00:01:26.157]rcsp_ble_adv_enable_with_con_dev, rets=0xfe40f08
+[00:01:26.158]apps/common/third_party_profile/jieli/rcsp/ble_rcsp_server.c, rcsp_ble_adv_enable_with_con_dev, 492, max:1, conn_num:0
+[00:01:26.160]ble_module_enable, rets=0xfe40b24
+[00:01:26.161][LE-RCSP]ble_module_enable:1
+ 
+[00:01:26.161]rcsp_bt_ble_adv_enable, rets=0xfe40b24
+[00:01:26.162]set_adv_enable, en:1, rets=0xfe407ec
+[00:01:26.163][LE-RCSP]adv_en:1
+ 
+[00:01:26.164][LE-RCSP]ble_work_st:5->20
+ 
+[00:01:26.165]ADV data():
+1E FF D6 05 7E 51 03 21 22 20 C7 F6 6C 5C 13 01 
+64 00 00 26 01 00 00 90 DC 29 D6 E7 F5 04 7F 
+[00:01:26.166]rsp_data(13):
+02 01 0A 09 09 38 37 36 35 34 33 32 00 
+[00:01:26.168]set_address_for_adv_handle:0
+
+13 5C 6C F6 C7 20 
+[00:01:26.175]get_update_flag:0
+```
+
+
+
 ## 调用链
 
 - `apps\common\third_party_profile\jieli\rcsp\server\functions\rcsp_setting_opt\settings\adv_bt_name_setting.c`
