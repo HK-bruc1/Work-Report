@@ -315,6 +315,9 @@ static const u8 tab_section_num[] = {
 
 # 修改蓝牙名
 
+- 是主耳回调函数，只有主耳执行。
+- 一起复位有概率不行，只能同时关机了。
+
 ## 日志
 
 ```c
@@ -381,29 +384,34 @@ REGISTER_APP_SETTING_OPT(adv_bt_name_opt);
 
 static void deal_bt_name_setting(u8 *bt_name_setting, u8 write_vm, u8 tws_sync)
 {
+    printf("%s(%d)",__func__,__LINE__);
+    u8 write_vm_ret = 0;
     if (!bt_name_setting) {
         get_bt_name_setting(g_edr_name);
     } else {
         memcpy(g_edr_name, bt_name_setting, 32);
     }
     if (write_vm) {
-        update_bt_name_vm_value(g_edr_name);
+        write_vm_ret = update_bt_name_vm_value(g_edr_name);
     }
     if (tws_sync) {
         bt_name_sync(g_edr_name);
     }
+    if (write_vm_ret) {
+        //这里只能主耳执行，使用tws_sync_poweroff()以及sys_enter_soft_poweroff(POWEROFF_NORMAL_TWS)会重复报一次提示音
+        //power_set_soft_poweroff()只会单耳关机
+        //一起复位有概率不行
+        tws_api_sync_call_by_uuid('T', SYNC_CMD_POWER_OFF_TOGETHER, 300);
+    }
 }
 
 // 1、写入VM
-static void update_bt_name_vm_value(u8 *bt_name_setting)
+static int update_bt_name_vm_value(u8 *bt_name_setting)
 {
-    syscfg_write(CFG_BT_NAME, bt_name_setting, 32);
-    //直接复位刷新名称，放外面的话，开机回调时会有影响。
-    cpu_reset();
+    u8 ret = syscfg_write(CFG_BT_NAME, bt_name_setting, 32);
+    return ret;
 }
 ```
-
-
 
 # APP中的恢复出厂设置
 
