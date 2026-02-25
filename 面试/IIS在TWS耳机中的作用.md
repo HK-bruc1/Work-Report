@@ -191,86 +191,11 @@ LRCLK: |‾‾‾‾‾‾‾‾‾‾‾‾|______________|  (左/右声道选�
 SDAT:  [左声道数据][右声道数据][左声道数据]...
 ```
 
-## JL709N SDK中的实际配置
-
-### 默认配置（大多数TWS耳机）
-```c
-// 禁用IIS，使用内部DAC
-#define TCFG_IIS_NODE_ENABLE              0     // IIS节点禁用
-#define TCFG_DAC_NODE_ENABLE              1     // DAC节点启用
-#define TCFG_IIS_ENABLE                   DISABLE_THIS_MOUDLE
-
-// 音频输出配置
-#define TCFG_AUDIO_OUTPUT_IIS             (DISABLE && TCFG_IIS_ENABLE)
-#define TCFG_IIS_OUTPUT_DATAPORT_SEL      ALINK_CH0
-```
-
-### IIS启用时的代码流程
-```c
-// 1. 音频管道配置
-player->stream = jlstream_pipeline_parse(uuid, NODE_UUID_IIS0_TX);
-
-// 2. IIS硬件初始化
-struct alink_param params = {
-    .module_idx = 0,
-    .bit_width = 0,      // 16bit
-    .sr = 16000,         // 采样率
-    .dma_size = 1024,    // DMA缓冲区
-};
-void *iis_hdl = audio_iis_init(params);
-
-// 3. 启动IIS传输
-audio_iis_open(iis_hdl, 0);   // 打开通道0
-audio_iis_start(iis_hdl);     // 启动硬件
-```
-
-### ALINK参数配置详解
-```c
-// ALINK参数结构体（audio_link.h:173-194）
-typedef struct _ALINK_PARM {
-    ALINK_PORT module;           // 模块：ALINK0
-    u8 mclk_io;                  // MCLK IO输出配置
-    u8 sclk_io;                  // SCLK IO输出配置
-    u8 lrclk_io;                 // LRCLK IO输出配置
-    struct alnk_hw_ch ch_cfg[4]; // 4个通道配置
-    ALINK_MODE mode;             // 模式：ALINK_MD_IIS
-    ALINK_ROLE role;             // 角色：主机/从机
-    ALINK_CLK_MODE clk_mode;     // 时钟边沿模式
-    ALINK_DATA_BW bitwide;       // 数据位宽：16/24/32bit
-    ALINK_SLOT_NUM slot_num;     // slot数量：1-8
-    u32 dma_len;                 // DMA缓冲区长度
-    ALINK_SR sample_rate;        // 采样率
-    ALINK_BUF_MODE buf_mode;     // 缓冲区模式：乒乓/循环
-    // ... 其他参数
-} ALINK_PARM;
-
-// 典型IIS配置示例（audio_alink_demo.c:51）
-ALINK_PARM alink0_demo = {
-    .mode = ALINK_MD_IIS,                    // IIS模式
-    .role = ALINK_ROLE_MASTER,               // 主模式
-    .clk_mode = ALINK_CLK_FALL_UPDATE_RAISE_SAMPLE, // 下降沿更新，上升沿采样
-    .bitwide = ALINK_BW_16BIT,               // 16位数据
-    .slot_num = ALINK_SLOT_NUM2,             // 2个slot（立体声）
-    .sample_rate = ALINK_SR_16000,           // 16kHz采样率
-    .ch_cfg[0] = {
-        .dir = ALINK_DIR_TX,                 // 发送方向
-        .ch_mode = ALINK_CH_MD_BASIC_IIS,    // 通道配置为IIS模式
-    },
-};
-```
-
-### 音频节点UUID定义
-```c
-#define NODE_UUID_IIS0_TX           0x69A5    // IIS发送节点
-#define NODE_UUID_IIS0_RX           0x69A6    // IIS接收节点
-#define NODE_UUID_MULTI_CH_IIS0_TX  0x6A2D    // 多通道IIS发送
-```
-
 ## 与其他通信总线的对比
 
 | 总线协议 | 专用性 | 传输内容 | 硬件实现（以JL709N为例） | 在TWS耳机中的应用 |
 |---------|--------|----------|--------------------------|------------------|
-| **IIS** | **专用音频** | PCM音频数据 | **ALINK控制器**<br/>专用音频硬件，不能软件模拟 | 连接外部Codec，高品质音频输出 |
+| **IIS** | **专用音频** | PCM音频数据 | **ALINK控制器**<br/专用音频硬件，不能软件模拟 | 连接外部Codec，高品质音频输出 |
 | SPI | 通用数据 | 任意二进制数据 | SPI控制器<br/>可软件模拟但效率低 | Flash存储、屏幕显示 |
 | I2C | 通用控制 | 控制命令/寄存器 | I2C控制器<br/>可软件模拟（Bit-banging） | 传感器控制、EEPROM访问 |
 | UART | 通用串行 | 异步数据流 | UART控制器<br/>可软件模拟但精度差 | 调试输出、AT指令通信 |
