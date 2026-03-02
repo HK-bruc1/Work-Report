@@ -1367,6 +1367,42 @@ void charge_ldo5v_off_deal(void)
 1. 去掉呼吸灯
 2. 如果还有就是硬件问题，无法解决！！！
 
+## 可视化灯效切换不了或者效果不对问题
+
+`cpu\components\led_api.c`
+
+```c
+    case ALWAYS_EXTINGUISH:
+        pwm_led_hw_close();
+        return;
+    }
+    pwm_led_hw_close(); //可视化灯效切换不了或者效果不对问题
+    pwm_led_hw_init(&pled);
+}
+
+    if (use_pwm_led) {
+        two_io_ctl_close(); //可视化灯效切换不了或者效果不对问题
+        led_effect_output_by_hardware(led_effect, cbpriv);
+    } else {
+        pwm_led_hw_close(); //可视化灯效切换不了或者效果不对问题
+#if TCFG_LED_LAYOUT >= TWO_IO_TWO_LED
+        led_effect_output_by_software(led_effect, cbpriv);
+#endif
+        return;
+    }
+
+    if (led_board_cfg->layout == THREE_IO_TWO_LED) {//第三IO
+        if (led_effect->ctl_mode == ALWAYS_EXTINGUISH) {
+            gpio_set_mode(IO_PORT_SPILT(led_board_cfg->com_pole_port), PORT_HIGHZ);
+        } else {
+            gpio_set_mode(IO_PORT_SPILT(led_board_cfg->com_pole_port), PORT_OUTPUT_LOW);
+        }
+    }
+}
+```
+
+
+
 # DUT
 
 `bt_key_power_msg_remap`创建按键事件触发后的DUT函数
@@ -4873,6 +4909,29 @@ void app_send_message(int _msg, int arg)
     msg[1] = arg;
     os_taskq_post_type("app_core", MSG_FROM_APP, 2, msg);
     printf("KEY消息映射成对应APP_MSG_XX并发送到MSG_FROM_APP\n");
+}
+```
+
+# 反复播放暂停音乐 ，概率性下一次播放时，耳机一直打印sbc_packet
+
+`audio\framework\plugs\source\a2dp_streamctrl.c`
+
+```c
+        } else if (!ctrl->stream_error && (u16)(seqn - ctrl->seqn) > 1) {
+            err = -EAGAIN;
+            if ((u16)(seqn - ctrl->seqn) > 32768) {
+                // return err; //反复播放暂停音乐 ，概率性下一次播放时，耳机一直打印sbc_packet
+            }
+            ctrl->stream_error = A2DP_STREAM_MISSED;
+            ctrl->missed_num = 2;//(u16)(seqn - ctrl->seqn);
+            /*printf("case 2 : %d, %d, %d\n", seqn, ctrl->seqn, ctrl->missed_num);*/
+        }
+        ctrl->repair_num = 0;
+    }
+
+__exit:
+    ctrl->seqn = seqn;
+    return err;
 }
 ```
 
