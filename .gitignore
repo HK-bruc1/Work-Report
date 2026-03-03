@@ -1,2 +1,40 @@
+# macOS
 .DS_Store
 **/.DS_Store
+
+# 系统缓存
+Thumbs.db
+desktop.ini
+
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node.js
+node_modules/
+.npm/
+.yarn/cache/
+.pnp.*
+
+# 构建产物
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 环境
+.env
+.env.local
+*.log
