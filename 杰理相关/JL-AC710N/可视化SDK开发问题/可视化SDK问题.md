@@ -608,7 +608,42 @@ case KEY_ACTION_FIFTH_CLICK:
 
 ## 触摸按键的多击+长按实现
 
+## 可视化工具开同时按键消息时，单击会失效？？？
 
+```c
+static int tws_combination_key_translate(int msg, int rx)
+{
+    if (!(tws_api_get_tws_state() & TWS_STA_SIBLING_CONNECTED)) {
+        return msg;
+    }
+
+    if (g_msg[0] != g_msg[1]) {
+        return msg;
+    }
+    if (g_msg[0] == 0) {
+        return 0;
+    }
+    int msec = jiffies_offset_to_msec(g_time[0], g_time[1]);
+    if (msec > 200 || msec < -200) {
+        /*r_printf("---msec: %x, %x, %d\n", g_time[0], g_time[1], msec);*/
+        return msg;
+    }
+    g_msg[0] = 0;
+    g_msg[1] = 0;
+
+    int action = APP_MSG_KEY_ACTION(msg);
+    if (action == KEY_ACTION_CLICK) {
+        // action = KEY_ACTION_TWS_CLICK;
+    } else if (action >= KEY_ACTION_DOUBLE_CLICK && action <= KEY_ACTION_HOLD_10SEC) {
+        action += KEY_ACTION_TWS_DOUBLE_CLICK - KEY_ACTION_DOUBLE_CLICK;
+    } else {
+        return msg;
+    }
+    printf("tws_comb_key: %d, %d\n", msec, action);
+
+    return (msg & ~0xff) | action;
+}
+```
 
 # 恢复出厂设置
 
