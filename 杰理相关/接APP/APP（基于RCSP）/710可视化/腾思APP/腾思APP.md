@@ -413,232 +413,9 @@ static int update_bt_name_vm_value(u8 *bt_name_setting)
 }
 ```
 
-# APP中的恢复出厂设置
+## 改名后苹果复位
 
-## 调用链
-
-- `apps\common\third_party_profile\jieli\rcsp\server\rcsp_cmd_recieve.c`
-
-```c
-void rcsp_cmd_recieve(void *priv, u8 OpCode, u8 OpCode_SN, u8 *data, u16 len, u16 ble_con_handle, u8 *spp_remote_addr)
-{
-    switch (OpCode) {
-        case JL_OPCODE_CUSTOMER_USER:
-        rcsp_user_cmd_recieve(priv, OpCode, OpCode_SN, data, len, ble_con_handle, spp_remote_addr);
-        break;  
-```
-
-- `apps\common\third_party_profile\jieli\rcsp\server\rcsp_cmd_user.c`
-
-```c
-//*----------------------------------------------------------------------------*/
-/**@brief    rcsp自定义命令数据接收处理
-   @param    priv:全局rcsp结构体， OpCode:当前命令， OpCode_SN:当前的SN值， data:数据， len:数据长度
-   @return
-   @note	 二次开发需要增加自定义命令，通过JL_OPCODE_CUSTOMER_USER进行扩展，
-  			 不要定义这个命令以外的命令，避免后续SDK更新导致命令冲突
-*/
-/*----------------------------------------------------------------------------*/
-void rcsp_user_cmd_recieve(void *priv, u8 OpCode, u8 OpCode_SN, u8 *data, u16 len, u16 ble_con_handle, u8 *spp_remote_addr)
-{
-    //自定义数据接收
-    rcsp_printf("%s:", __FUNCTION__);
-    rcsp_put_buf(data, len);
-#if 0
-    ///以下是发送测试代码
-    u8 test_send_buf[] = {0x04, 0x05, 0x06};
-    rcsp_user_cmd_send(test_send_buf, sizeof(test_send_buf));
-#endif
-
-    //调用自定义数据解析接口
-    extern void rscp_user_cmd_recv(void *priv, u8 OpCode, u8 OpCode_SN, u8 *data, u16 len, u16 ble_con_handle, u8 *spp_remote_addr);
-    rscp_user_cmd_recv(priv, OpCode, OpCode_SN, data, len, ble_con_handle, spp_remote_addr);
-
-    JL_CMD_response_send(OpCode, JL_PRO_STATUS_SUCCESS, OpCode_SN, NULL, 0, ble_con_handle, spp_remote_addr);
-
-}
-
-//--------------------------数据解析 (APP发过来的数据)------------------------------
-extern void dhf_factory_reset_deal(void);
-void rscp_user_cmd_recv(void *priv, u8 OpCode, u8 OpCode_SN, u8 *data, u16 len, u16 ble_con_handle, u8 *spp_remote_addr){
-
-    printf("接收到APP自定义指令----%s(%d)",__func__,__LINE__);
-    if(len == 4 && (data[0] == 0xFF) && (data[1] == 0xFD) && (data[2] == 0xF5) && (data[3] == 0x01)){
-        //接收到APP的恢复出厂设置命令
-        //恢复出厂设置之前把音乐停止掉，不然按键触发对应提示音后，音乐还会继续播放
-        bt_cmd_prepare(USER_CTRL_AVCTP_OPID_STOP, 0, NULL);
-        //自定义的处理函数
-        dhf_factory_reset_deal();
-    }
-}
-```
-
-# RCSP广播
-
-`apps\common\third_party_profile\jieli\rcsp\adv\ble_rcsp_adv.c`
-
-```c
-    rcsp_bt_ble_adv_enable(0);
-    rcsp_make_set_adv_data();
-    rcsp_make_set_rsp_data();
-    rcsp_bt_ble_adv_enable(1);
-```
-
-## `rcsp_make_set_adv_data()` - 设置广播数据包（ADV Data）
-
-**作用**：生成并设置BLE的**主广播数据包**，包含设备的核心识别信息。
-
-**包含的关键信息**：
-
-- **厂商ID**（JL ID: 0x05D6）
-- **VID/PID**（设备型号识别）
-- **设备类型**（耳机/音箱/手表等）
-- **MAC地址**
-- **电量信息**（左耳、右耳、充电仓）
-- **连接状态标志**
-- **TWS配对状态**
-- **Hash校验码**（防伪验证）
-
-**特点**：
-
-- 固定31字节长度
-- **主动广播**，无需手机扫描即可接收
-- 包含快速识别设备所需的最小信息集
-
-## `rcsp_make_set_rsp_data()` - 设置扫描响应数据包（Scan Response）
-
-**作用**：生成并设置BLE的**扫描响应数据包**，补充广播包无法容纳的信息。
-
-**包含的关键信息**：
-
-- **设备名称**（通过 `bt_get_local_name()` 获取）
-- **FLAGS**（设备能力标志）
-
-**特点**：
-
-- 动态长度（取决于设备名称长度）
-- **被动响应**，只有当手机主动发起扫描请求（Scan Request）时才返回
-- 主要用于显示人类可读的设备名称
-
-## 在NRF Connect工具中的体现
-
-当你在NRF Connect中看到一个BLE设备时：
-
-| 数据包类型   | 对应函数                   | 你看到的内容                                       |
-| ------------ | -------------------------- | -------------------------------------------------- |
-| **ADV_IND**  | `rcsp_make_set_adv_data()` | 原始广播数据（Manufacturer Data，包含电量、MAC等） |
-| **SCAN_RSP** | `rcsp_make_set_rsp_data()` | 设备名称（Complete Local Name）                    |
-
-**查看方式**：
-
-- 点击设备后，**RAW** 标签页会显示两个数据包
-- **ADV** 部分 = `adv_data`（31字节）
-- **SCAN RSP** 部分 = `scan_rsp_data`（包含设备名）
-
-## 为什么要分开？
-
-1. **空间限制**：BLE 4.x 广播包最大31字节，无法同时容纳所有信息
-2. **省电优化**：主广播包高频发送，扫描响应包按需发送
-3. **快速识别**：手机可以先通过ADV包判断设备类型/电量，再决定是否获取完整名称
-
-## 异常分析
-
-### BLE名称没有超出限制日志
-
-```c
-[00:00:08.887]ADV data():
-1E FF D6 05 7E 51 03 21 22 D3 38 DF 6E 32 91 00 
-64 00 00 10 01 00 00 E0 C7 C9 01 5A 92 84 96 
-[00:00:08.889]rsp_data(31):
-02 01 0A 1B 09 44 45 56 49 41 20 55 4C 54 52 41 
-20 41 49 52 20 50 52 4F 2D 45 4D 34 31 30 00 
-
-[00:00:08.891]<error> [APP_BLE]app_ble_adv_enable 1 faild !
-```
-
-### BLE名称超出限制日志
-
-```c
-[00:00:02.842]ADV data():
-1E FF D6 05 7E 51 03 21 22 D3 38 DF 6E 32 91 00 
-64 00 00 10 01 00 00 E0 C7 C9 01 5A 92 84 96 
-[00:00:02.843]***rsp_data overflow!!!!!!
-[00:00:02.844]advertisements_setup_init fail !!!!!!
-[00:00:02.845]set_address_for_adv_handle:0
-
-91 32 6E DF 38 D3 
-```
-
-### 自动截断继续往下跑
-
-```c
-int rcsp_make_set_rsp_data(void)
-{
-    u8 offset = 0;
-    u8 *buf = scan_rsp_data;
-    const char *edr_name = bt_get_local_name();
-
-#if DOUBLE_BT_SAME_MAC || TCFG_BT_BLE_BREDR_SAME_ADDR
-    offset += make_eir_packet_val(&buf[offset], offset, HCI_EIR_DATATYPE_FLAGS, 0x0A, 1);
-#else
-    offset += make_eir_packet_val(&buf[offset], offset, HCI_EIR_DATATYPE_FLAGS, 0x06, 1);
-#endif
-
-    u8 name_len = strlen(edr_name) + 1;
-    //修改1：超长时自动截断，而不是返回失败
-    if (offset + 2 + name_len > ADV_RSP_PACKET_MAX) {
-        name_len = ADV_RSP_PACKET_MAX - offset - 2;  // 计算最大可用长度
-        puts("***rsp_data overflow, auto truncate!!!!!!\n");
-        // return -1;  // 删除这行，不再返回失败
-    }
-    offset += make_eir_packet_data(&buf[offset], offset, HCI_EIR_DATATYPE_COMPLETE_LOCAL_NAME, (void *)edr_name, name_len);
-    scan_rsp_data_len = offset;
-    log_info("rsp_data(%d):", offset);
-    log_info_hexdump(buf, offset);
-#if !TCFG_THIRD_PARTY_PROTOCOLS_SIMPLIFIED
-    app_ble_rsp_data_set(rcsp_server_ble_hdl, buf, 31);
-    app_ble_rsp_data_set(rcsp_server_ble_hdl1, buf, 31);
-#else
-    ble_op_set_rsp_data(offset, buf);
-#endif
-    return 0;
-}
-```
-
-### 是否可以加长
-
-- 31字节是BLE协议的硬性规定，不能加长！
-
-**BLE 4.0/4.1/4.2 - 严格31字节**
-
-- **技术原因：**
-  - 总包长最大 47 bytes
-  - MAC地址头 6 bytes
-  - PDU头 2 bytes
-  - **剩余 = 31 bytes**（这是协议栈能用的最大空间）
-
-**BLE 5.0 扩展广播（Extended Advertising）**
-
-- BLE 5.0引入了**扩展广播**，可以突破31字节限制：
-- **但有3个前提条件：**
-  1. ✅ **芯片支持** BLE 5.0
-  2. ✅ **手机支持** BLE 5.0（iOS 13+, Android 8+）
-  3. ✅ **代码启用** Extended Advertising
-
-### 最长多少
-
-**所有可见字符（包括字母、数字、空格、标点符号）都占用字节**。
-
-在 26 字节限制内，你需要计算：
-
-- 字母：每个 1 字节
-- 数字：每个 1 字节
-- **空格：每个 1 字节** ⬅️ 重点
-- 标点（-）：每个 1 字节
-
-# 改名后苹果复位
-
-## 死机复位日志
+### 死机复位日志
 
 ```c
 =======================================
@@ -933,7 +710,7 @@ app_core task backtrace :
 [00:00:00.100][PMU]sfc_bit_mode: 2, port: 0
 ```
 
-## 分析
+### 分析
 
 **MMU读取异常** - CPU0在用户模式下访问内存时触发了MMU（内存管理单元）异常：
 
@@ -942,14 +719,14 @@ app_core task backtrace :
 Exception In User Mode
 ```
 
-### 异常发生位置
+#### 异常发生位置
 
 - **PC追踪**: `0x0010811E -> 0x00108140 -> 0x000FEB9E -> 0x000FEBC6`
 - **当前任务**: `app_core`
 - **RETS**: `0x000FEB9E` (子程序返回地址)
 - **RETI**: `0x000FEBC6` (中断返回地址)
 
-### 可能的原因
+#### 可能的原因
 
 1. 非法内存访问
    - 访问了未映射或无权限的内存地址
@@ -967,7 +744,7 @@ reset_source_value: 0x2000401
 
 系统检测到异常后触发了软件复位
 
-### 建议排查方向
+#### 建议排查方向
 
 1. 检查地址 `0x000FEB9E` 和 `0x000FEBC6` 附近的代码
 2. 检查 `app_core` 任务中的指针使用和内存访问
@@ -1024,6 +801,282 @@ static void deal_bt_name_setting(u8 *bt_name_setting, u8 write_vm, u8 tws_sync)
         power_set_soft_poweroff();//不带提示音的
         break;
 ```
+
+## 改名后操作处理位置有问题导致单耳出入仓会复位
+
+- H02的基于RCSP的第三方APP可以。。。不会出现这种问题
+
+```c
+static RCSP_SETTING_OPT adv_bt_name_opt = {
+    .data_len = 32,
+    .setting_type =	ATTR_TYPE_EDR_NAME,
+    .syscfg_id = CFG_BT_NAME,
+    .deal_opt_setting = deal_bt_name_setting,
+    .set_setting = set_bt_name_setting,
+    .get_setting = get_bt_name_setting,
+    .custom_setting_init = NULL,
+    .custom_vm_info_update = NULL,
+    .custom_setting_update = NULL,
+    .custom_sibling_setting_deal = NULL,
+    .custom_setting_release = NULL,
+    .set_setting_extra_handle = bt_name_set_setting_extra_handle,
+    .get_setting_extra_handle = bt_name_get_setting_extra_handle,
+};
+
+static void deal_bt_name_setting(u8 *bt_name_setting, u8 write_vm, u8 tws_sync)
+{
+    printf("%s(%d)",__func__,__LINE__);
+    u8 write_vm_ret = 0;
+    if (!bt_name_setting) {
+        get_bt_name_setting(g_edr_name);
+    } else {
+        memcpy(g_edr_name, bt_name_setting, 32);
+    }
+    if (write_vm) {
+        write_vm_ret = update_bt_name_vm_value(g_edr_name);
+    }
+    if (tws_sync) {
+        bt_name_sync(g_edr_name);
+    }
+    if (write_vm_ret) {
+        //这里只能主耳执行，使用tws_sync_poweroff()以及sys_enter_soft_poweroff(POWEROFF_NORMAL_TWS)会重复报一次提示音
+        //power_set_soft_poweroff()只会单耳关机
+        //一起复位有概率不行
+        //tws_api_sync_call_by_uuid('T', SYNC_CMD_POWER_OFF_TOGETHER, 300);
+        rcsp_reset_name_deal_os();//IOS平台连接上APP后也会写一次VM，所以改名后的操作不放在这里
+    }
+}
+
+// 1、写入VM
+static int update_bt_name_vm_value(u8 *bt_name_setting)
+{
+    u8 ret = syscfg_write(CFG_BT_NAME, bt_name_setting, 32);
+    return ret;
+}
+```
+
+# APP中的恢复出厂设置
+
+## 调用链
+
+- `apps\common\third_party_profile\jieli\rcsp\server\rcsp_cmd_recieve.c`
+
+```c
+void rcsp_cmd_recieve(void *priv, u8 OpCode, u8 OpCode_SN, u8 *data, u16 len, u16 ble_con_handle, u8 *spp_remote_addr)
+{
+    switch (OpCode) {
+        case JL_OPCODE_CUSTOMER_USER:
+        rcsp_user_cmd_recieve(priv, OpCode, OpCode_SN, data, len, ble_con_handle, spp_remote_addr);
+        break;  
+```
+
+- `apps\common\third_party_profile\jieli\rcsp\server\rcsp_cmd_user.c`
+
+```c
+//*----------------------------------------------------------------------------*/
+/**@brief    rcsp自定义命令数据接收处理
+   @param    priv:全局rcsp结构体， OpCode:当前命令， OpCode_SN:当前的SN值， data:数据， len:数据长度
+   @return
+   @note	 二次开发需要增加自定义命令，通过JL_OPCODE_CUSTOMER_USER进行扩展，
+  			 不要定义这个命令以外的命令，避免后续SDK更新导致命令冲突
+*/
+/*----------------------------------------------------------------------------*/
+void rcsp_user_cmd_recieve(void *priv, u8 OpCode, u8 OpCode_SN, u8 *data, u16 len, u16 ble_con_handle, u8 *spp_remote_addr)
+{
+    //自定义数据接收
+    rcsp_printf("%s:", __FUNCTION__);
+    rcsp_put_buf(data, len);
+#if 0
+    ///以下是发送测试代码
+    u8 test_send_buf[] = {0x04, 0x05, 0x06};
+    rcsp_user_cmd_send(test_send_buf, sizeof(test_send_buf));
+#endif
+
+    //调用自定义数据解析接口
+    extern void rscp_user_cmd_recv(void *priv, u8 OpCode, u8 OpCode_SN, u8 *data, u16 len, u16 ble_con_handle, u8 *spp_remote_addr);
+    rscp_user_cmd_recv(priv, OpCode, OpCode_SN, data, len, ble_con_handle, spp_remote_addr);
+
+    JL_CMD_response_send(OpCode, JL_PRO_STATUS_SUCCESS, OpCode_SN, NULL, 0, ble_con_handle, spp_remote_addr);
+
+}
+
+//--------------------------数据解析 (APP发过来的数据)------------------------------
+extern void dhf_factory_reset_deal(void);
+void rscp_user_cmd_recv(void *priv, u8 OpCode, u8 OpCode_SN, u8 *data, u16 len, u16 ble_con_handle, u8 *spp_remote_addr){
+
+    printf("接收到APP自定义指令----%s(%d)",__func__,__LINE__);
+    if(len == 4 && (data[0] == 0xFF) && (data[1] == 0xFD) && (data[2] == 0xF5) && (data[3] == 0x01)){
+        //接收到APP的恢复出厂设置命令
+        //恢复出厂设置之前把音乐停止掉，不然按键触发对应提示音后，音乐还会继续播放
+        bt_cmd_prepare(USER_CTRL_AVCTP_OPID_STOP, 0, NULL);
+        //自定义的处理函数
+        dhf_factory_reset_deal();
+    }
+}
+```
+
+# RCSP广播
+
+`apps\common\third_party_profile\jieli\rcsp\adv\ble_rcsp_adv.c`
+
+```c
+    rcsp_bt_ble_adv_enable(0);
+    rcsp_make_set_adv_data();
+    rcsp_make_set_rsp_data();
+    rcsp_bt_ble_adv_enable(1);
+```
+
+## `rcsp_make_set_adv_data()` - 设置广播数据包（ADV Data）
+
+**作用**：生成并设置BLE的**主广播数据包**，包含设备的核心识别信息。
+
+**包含的关键信息**：
+
+- **厂商ID**（JL ID: 0x05D6）
+- **VID/PID**（设备型号识别）
+- **设备类型**（耳机/音箱/手表等）
+- **MAC地址**
+- **电量信息**（左耳、右耳、充电仓）
+- **连接状态标志**
+- **TWS配对状态**
+- **Hash校验码**（防伪验证）
+
+**特点**：
+
+- 固定31字节长度
+- **主动广播**，无需手机扫描即可接收
+- 包含快速识别设备所需的最小信息集
+
+## `rcsp_make_set_rsp_data()` - 设置扫描响应数据包（Scan Response）
+
+**作用**：生成并设置BLE的**扫描响应数据包**，补充广播包无法容纳的信息。
+
+**包含的关键信息**：
+
+- **设备名称**（通过 `bt_get_local_name()` 获取）
+- **FLAGS**（设备能力标志）
+
+**特点**：
+
+- 动态长度（取决于设备名称长度）
+- **被动响应**，只有当手机主动发起扫描请求（Scan Request）时才返回
+- 主要用于显示人类可读的设备名称
+
+## 在NRF Connect工具中的体现
+
+当你在NRF Connect中看到一个BLE设备时：
+
+| 数据包类型   | 对应函数                   | 你看到的内容                                       |
+| ------------ | -------------------------- | -------------------------------------------------- |
+| **ADV_IND**  | `rcsp_make_set_adv_data()` | 原始广播数据（Manufacturer Data，包含电量、MAC等） |
+| **SCAN_RSP** | `rcsp_make_set_rsp_data()` | 设备名称（Complete Local Name）                    |
+
+**查看方式**：
+
+- 点击设备后，**RAW** 标签页会显示两个数据包
+- **ADV** 部分 = `adv_data`（31字节）
+- **SCAN RSP** 部分 = `scan_rsp_data`（包含设备名）
+
+## 为什么要分开？
+
+1. **空间限制**：BLE 4.x 广播包最大31字节，无法同时容纳所有信息
+2. **省电优化**：主广播包高频发送，扫描响应包按需发送
+3. **快速识别**：手机可以先通过ADV包判断设备类型/电量，再决定是否获取完整名称
+
+## 异常分析
+
+### BLE名称没有超出限制日志
+
+```c
+[00:00:08.887]ADV data():
+1E FF D6 05 7E 51 03 21 22 D3 38 DF 6E 32 91 00 
+64 00 00 10 01 00 00 E0 C7 C9 01 5A 92 84 96 
+[00:00:08.889]rsp_data(31):
+02 01 0A 1B 09 44 45 56 49 41 20 55 4C 54 52 41 
+20 41 49 52 20 50 52 4F 2D 45 4D 34 31 30 00 
+
+[00:00:08.891]<error> [APP_BLE]app_ble_adv_enable 1 faild !
+```
+
+### BLE名称超出限制日志
+
+```c
+[00:00:02.842]ADV data():
+1E FF D6 05 7E 51 03 21 22 D3 38 DF 6E 32 91 00 
+64 00 00 10 01 00 00 E0 C7 C9 01 5A 92 84 96 
+[00:00:02.843]***rsp_data overflow!!!!!!
+[00:00:02.844]advertisements_setup_init fail !!!!!!
+[00:00:02.845]set_address_for_adv_handle:0
+
+91 32 6E DF 38 D3 
+```
+
+### 自动截断继续往下跑
+
+```c
+int rcsp_make_set_rsp_data(void)
+{
+    u8 offset = 0;
+    u8 *buf = scan_rsp_data;
+    const char *edr_name = bt_get_local_name();
+
+#if DOUBLE_BT_SAME_MAC || TCFG_BT_BLE_BREDR_SAME_ADDR
+    offset += make_eir_packet_val(&buf[offset], offset, HCI_EIR_DATATYPE_FLAGS, 0x0A, 1);
+#else
+    offset += make_eir_packet_val(&buf[offset], offset, HCI_EIR_DATATYPE_FLAGS, 0x06, 1);
+#endif
+
+    u8 name_len = strlen(edr_name) + 1;
+    //修改1：超长时自动截断，而不是返回失败
+    if (offset + 2 + name_len > ADV_RSP_PACKET_MAX) {
+        name_len = ADV_RSP_PACKET_MAX - offset - 2;  // 计算最大可用长度
+        puts("***rsp_data overflow, auto truncate!!!!!!\n");
+        // return -1;  // 删除这行，不再返回失败
+    }
+    offset += make_eir_packet_data(&buf[offset], offset, HCI_EIR_DATATYPE_COMPLETE_LOCAL_NAME, (void *)edr_name, name_len);
+    scan_rsp_data_len = offset;
+    log_info("rsp_data(%d):", offset);
+    log_info_hexdump(buf, offset);
+#if !TCFG_THIRD_PARTY_PROTOCOLS_SIMPLIFIED
+    app_ble_rsp_data_set(rcsp_server_ble_hdl, buf, 31);
+    app_ble_rsp_data_set(rcsp_server_ble_hdl1, buf, 31);
+#else
+    ble_op_set_rsp_data(offset, buf);
+#endif
+    return 0;
+}
+```
+
+### 是否可以加长
+
+- 31字节是BLE协议的硬性规定，不能加长！
+
+**BLE 4.0/4.1/4.2 - 严格31字节**
+
+- **技术原因：**
+  - 总包长最大 47 bytes
+  - MAC地址头 6 bytes
+  - PDU头 2 bytes
+  - **剩余 = 31 bytes**（这是协议栈能用的最大空间）
+
+**BLE 5.0 扩展广播（Extended Advertising）**
+
+- BLE 5.0引入了**扩展广播**，可以突破31字节限制：
+- **但有3个前提条件：**
+  1. ✅ **芯片支持** BLE 5.0
+  2. ✅ **手机支持** BLE 5.0（iOS 13+, Android 8+）
+  3. ✅ **代码启用** Extended Advertising
+
+### 最长多少
+
+**所有可见字符（包括字母、数字、空格、标点符号）都占用字节**。
+
+在 26 字节限制内，你需要计算：
+
+- 字母：每个 1 字节
+- 数字：每个 1 字节
+- **空格：每个 1 字节** ⬅️ 重点
+- 标点（-）：每个 1 字节
 
 # 苹果APP界面中耳机出入仓配对后直接关机
 
