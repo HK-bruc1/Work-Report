@@ -233,300 +233,203 @@ Slave 是作为协处理器工作的 ESP 芯片。它负责：
 - `docs/spi_full_duplex.md`
 - `docs/uart.md`
 
-## 14. 怎么编译和烧录
+## 14. 编译与烧录（Slave：ESP32-C5）
 
-这一节尽量用实际动手的顺序来说明。
+本节说明如何使用 **VS Code + ESP-IDF 插件**编译和烧录 ESP-Hosted-MCU 的 Slave 固件。当前方案的 Slave 芯片为 **ESP32-C5**。
 
-先说结论：`esp-hosted-mcu` 通常不是只烧一个固件，而是要分别处理两端：
+---
 
-- `Slave` 端：烧到作为无线协处理器的 ESP 芯片上
-- `Host` 端：烧到主控板上
+### 14.1 ESP-IDF 是什么
 
-如果只把其中一端烧好，另一端没有对应配置，系统通常跑不起来。
+**ESP-IDF**（IoT Development Framework）是乐鑫官方为 ESP32 系列芯片提供的**开发框架/SDK**，本身不是 IDE。
 
-### 14.1 先准备环境
+| 对比项 | IDE（如 Keil） | ESP-IDF |
+|---|---|---|
+| 本质 | 集成开发**环境** | 开发**框架 / SDK** |
+| 包含内容 | 编辑器 + 编译器 + 调试器 + 工程管理 | 库函数 + 构建系统 + 工具链 |
+| 使用方式 | 打开软件直接用 | 需要搭配编辑器使用 |
+| STM32 类比 | Keil MDK | HAL 库 + arm-gcc + Makefile |
 
-文档要求先准备好 `ESP-IDF`。根 README 里提到建议使用 `ESP-IDF 5.3` 或更新版本。
+ESP-IDF 具体包含：
 
-在 Windows 下，推荐直接使用 ESP-IDF 提供的 PowerShell 环境。
+- **工具链**：ESP32-C5 基于 RISC-V 架构，对应 `riscv32-esp-elf-gcc` 交叉编译器
+  - 在windows上编译RISC架构的固件
 
-准备好后，常见命令会是下面这些：
+- **构建系统**：CMake + Ninja，由 `idf.py` 统一封装
+- **组件库**：Wi‑Fi、蓝牙、FreeRTOS、外设驱动、网络协议栈等
+- **工具集**：`esptool.py`（烧录）、`idf.py`（构建入口）、组件管理器
 
-```bash
-idf.py set-target <target>
-idf.py menuconfig
-idf.py build
-idf.py -p <串口号> flash monitor
+**安装了 ESP-IDF，就同时拥有了编译 ESP 芯片所需的全套工具和库，无需单独安装编译器。**
+
+对应到开发体验：Keil 的一体化操作，对应到 ESP32 就是 **VS Code + ESP-IDF 插件**——插件将 `idf.py` 的命令行操作封装成状态栏按钮和命令面板，点击即可完成编译、烧录、监视。
+
+> ESP-Hosted-MCU 要求 **ESP-IDF v5.3 或更高版本**。
+
+---
+
+### 14.2 环境准备
+
+#### 安装 ESP-IDF
+
+**Windows：** 从乐鑫官网下载 ESP-IDF Windows 安装包，按向导完成安装。安装时勾选 **ESP-IDF v5.3 或更新版本**，安装包会自动配置工具链路径和环境变量。
+
+安装 ESP-IDF 必备工具最简易的方式是下载一个 ESP-IDF 工具[安装器](https://dl.espressif.com/dl/esp-idf/?idf=4.4)。
+
+- 挂着代理下会快一点。成功后会出选两个快捷方式，一个cmd，一个powershell。
+
+#### 安装 VS Code ESP-IDF 插件
+
+1. 打开 VS Code，进入扩展面板（`Ctrl+Shift+X`）
+2. 搜索 **ESP-IDF**，安装 Espressif 官方插件
+3. 首次安装后，VS Code 会提示「Configure ESP-IDF Extension」，选择之前已安装的 IDF 路径（**Use existing installation**），指向安装目录即可
+
+安装完成后，VS Code 底部状态栏会出现 ESP-IDF 的快捷操作区域：
+
+```
+[串口选择]  [目标芯片]  [⚙ menuconfig]  [🔨 Build]  [⚡ Flash]  [🖥 Monitor]  [🔥 Build Flash Monitor]
 ```
 
-### 14.2 编译和烧录 Slave 固件
+---
 
-`slave/README.md` 给出的流程最直接。
+### 14.3 获取 Slave 工程
 
-#### 第一步：创建 slave 示例工程
-
-```bash
-idf.py create-project-from-example "espressif/esp_hosted:slave"
-cd slave
-```
-
-这个工程就是协处理器固件模板。
-
-#### 第二步：选择目标芯片
-
-例如，如果你的协处理器是 `ESP32-C6`：
+克隆本仓库（包含子模块）：
 
 ```bash
-idf.py set-target esp32c6
+git clone --recurse-submodules --depth 1 https://github.com/espressif/esp-hosted-mcu.git
 ```
 
-如果你用的是别的芯片，可以换成例如：
+克隆完成后，在 VS Code 中打开 `slave/` 子目录：
 
-- `esp32`
-- `esp32c3`
-- `esp32s3`
+**File → Open Folder → 选择 `esp-hosted-mcu/slave`**
 
-前提是该芯片支持你选用的 transport。
+VS Code ESP-IDF 插件会自动识别该目录为 ESP-IDF 工程。
 
-#### 第三步：配置 transport 和 GPIO
+---
 
-进入配置菜单：
+### 14.4 Slave 固件编译与烧录（ESP32-C5 + SPI Full-Duplex）
 
-```bash
-idf.py menuconfig
+#### 第一步：设置目标芯片
+
+点击状态栏中的芯片名称区域，在弹出的列表中选择 **`esp32c5`**。
+
+> 等效命令行：`idf.py set-target esp32c5`
+>
+> 此步骤告知构建系统切换到 ESP32-C5 的 RISC-V 工具链，必须在编译前完成。
+
+#### 第二步：配置传输方式（menuconfig）
+
+点击状态栏的 **⚙ SDK Config** 按钮，或通过命令面板（`Ctrl+Shift+P`）执行：
+
+```
+ESP-IDF: SDK Configuration editor (menuconfig)
 ```
 
-文档里说明，默认一般是 `SDIO`。如果你不是走 SDIO，需要手动改成对应方式。
+VS Code 会打开图形化配置界面（Web UI）。在搜索框输入 `transport` 快速定位，或手动按以下路径导航：
 
-配置路径大意是：
-
-```text
+```
 Example Configuration
-  -> Bus Config in between Host and Co-processor
-    -> Transport layer
+└── Bus Config in between Host and Co-processor
+    └── Transport layer
+        └── [选择] SPI Full-Duplex
 ```
 
-可以在这里选择：
+默认值为 SDIO，需改为 **SPI Full-Duplex**。
 
-- `SDIO`
-- `SPI Full-Duplex`
-- `SPI Half-Duplex`
-- `UART`
+同时确认以下 SPI 参数（初次调试可保持默认，联调时再按实际接线调整）：
 
-如果你还改了 GPIO、时钟、波特率等参数，记得 host 端也要保持一致。
+| 参数 | 说明 |
+|---|---|
+| MOSI / MISO / SCLK / CS GPIO | SPI 四线的引脚编号 |
+| Handshake GPIO | Slave 通知 Host 可以发起事务的引脚 |
+| Data Ready GPIO | Slave 通知 Host 有数据待取的引脚 |
+| Reset GPIO | Host 控制 Slave 复位的引脚 |
+| SPI 时钟频率 | 初次调试建议设为 **5 MHz**，稳定后再提高 |
 
-#### 第四步：编译
+配置完成后点击右上角 **Save** 保存。
 
-```bash
-idf.py build
+#### 第三步：编译
+
+点击状态栏的 **🔨 Build** 按钮，或命令面板执行：
+
+```
+ESP-IDF: Build your project
 ```
 
-编译完成后，常见的 slave 固件会出现在类似下面的位置：
+> 等效命令行：`idf.py build`
 
-```text
+编译输出会显示在 VS Code 终端面板。编译成功后，固件文件位于：
+
+```
 slave/build/network_adapter.bin
 ```
 
-这个文件后面做 OTA 时也会用到。
+该文件也是后续 OTA 升级时使用的固件包。
 
-#### 第五步：烧录 slave
+#### 第四步：选择串口
 
-```bash
-idf.py -p <串口号> flash monitor
-```
+通过 USB 串口线连接 ESP32-C5 开发板，点击状态栏左侧的串口选择区域，从下拉列表中选择对应端口（Windows 为 `COMx`，Linux / macOS 为 `/dev/ttyUSBx` 或 `/dev/cu.usbserialx`）。
 
-例如在 Windows 下可能像这样：
+#### 第五步：烧录并监视
 
-```bash
-idf.py -p COM5 flash monitor
-```
+点击状态栏的 **🔥 Build Flash Monitor** 按钮一键完成编译、烧录和串口监视，或分步点击 **⚡ Flash** → **🖥 Monitor**。
 
-### 14.3 编译和烧录 Host 固件
+> 等效命令行：`idf.py -p COM5 flash monitor`
 
-Host 端没有一个“唯一固定工程”，通常是：
+烧录完成后串口监视器自动启动。正常启动日志末尾会显示 SPI 初始化完成并等待 Host 连接的信息，说明 Slave 固件运行正常。
 
-- 你自己的 host 工程
-- 或 `examples/` 里的某个 host 示例
+---
 
-根 README 的意思是，host 端需要完成三件事：
+### 14.3 Host 固件说明
 
-1. 选一个示例或你的应用工程
-2. 把它配置成 Hosted 模式
-3. 让它的 transport/GPIO 与 slave 一致
+本方案的 Host 是蓝牙音频芯片，**不是 ESP 芯片**，因此 Host 侧无法使用 ESP-IDF 进行编译。Host 侧需要在蓝牙音频芯片的开发环境中，按照第 16 节的要求自行实现以下内容：
 
-Host 侧典型流程也是：
+- SPI 主机驱动
+- Handshake / Data Ready / Reset 信号处理
+- ESP-Hosted 帧头解析
+- RPC 请求与响应收发
 
-```bash
-idf.py set-target <host_target>
-idf.py menuconfig
-idf.py build
-idf.py -p <host串口号> flash monitor
-```
+Host 侧的配置参数（SPI GPIO、时钟频率、传输模式等）必须与 Slave 的 `menuconfig` 配置保持完全一致。
 
-重点不是命令本身，而是配置必须和 slave 匹配：
+---
 
-- 两边 transport 一致
-- 两边 GPIO 一致
-- 两边尽量使用同版本 ESP-Hosted
+### 14.4 OTA 升级说明
 
-### 14.4 三种 transport 下，怎么选更合适
+OTA（Over-The-Air）用于在系统运行期间远程更新 Slave 固件，**不是首次上线的推荐方式**。
 
-如果你还没确定怎么烧、怎么搭，通常可以按这个顺序判断：
+第一次烧录建议直接使用串口（即上文第五步的方式）。待系统稳定后，如需支持后续固件升级，可参考 `examples/host_performs_slave_ota/` 示例，该示例支持三种 OTA 来源：LittleFS、Host 分区、HTTPS。
 
-#### 方案一：SPI Full Duplex
-
-最适合初次验证，原因是：
-
-- 接线相对直观
-- 跳线测试更方便
-- 文档明确把它当作容易起步的方案
-
-如果你的目标是“先跑通系统”，优先考虑 SPI-FD。
-
-#### 方案二：SDIO
-
-适合更高性能场景，但文档特别强调要注意：
-
-- 上拉电阻
-- 线长
-- 信号完整性
-- 某些芯片的固定引脚限制
-
-如果只是杜邦线随便接，SDIO 反而更容易卡在硬件问题上。
-
-#### 方案三：UART
-
-最简单，但吞吐最低。适合：
-
-- 简单验证
-- 低速数据链路
-- 不追求网络性能的场景
-
-### 14.5 如果你用的是 ESP32-P4-Function-EV-Board
-
-这个仓库对 `ESP32-P4-Function-EV-Board` 支持比较完整，文档也最详细。
-
-它的特点是：
-
-- 板上 `ESP32-P4` 作为 host
-- 板上 `ESP32-C6` 作为 slave
-- 两者默认通过 `SDIO` 连接
-
-而且文档明确提到：
-
-- 板载 `ESP32-C6` 出厂通常已经预刷过 `ESP-Hosted-MCU slave firmware v0.0.6`
-
-所以第一次上手时，往往可以先：
-
-1. 先编译并烧录 P4 侧 host
-2. 直接测试是否能和板载 C6 建立 Hosted 链路
-3. 如果确认需要新特性，再升级 C6 的 slave 固件
-
-P4 host 的典型命令是：
+以 Host 分区方式为例，需将编译好的固件文件复制到指定位置：
 
 ```bash
-idf.py set-target esp32p4
-idf.py build
-idf.py -p <P4串口号> flash monitor
+cp slave/build/network_adapter.bin \
+   examples/host_performs_slave_ota/components/ota_partition/slave_fw_bin/
 ```
 
-如果要单独重刷板载 C6，文档建议：
+---
 
-1. 创建 `esp_hosted:slave` 工程
-2. `idf.py set-target esp32c6`
-3. 检查 transport 选的是 `SDIO`
-4. `idf.py build`
-5. 通过 `ESP-Prog` 或类似串口工具给 C6 烧录
+### 14.5 常见问题
 
-而且在烧 C6 时，可能需要先让 P4 进入 bootloader 状态，避免 host 干扰下载。
+| 现象 | 可能原因 |
+|---|---|
+| Host 与 Slave 无法建立连接 | 两侧 transport 类型不一致，或 GPIO 配置与实际接线不符 |
+| 日志出现 `drop pkt` | SPI 时钟过高，或杜邦线过长导致信号完整性差，建议先降低时钟频率 |
+| 协议交互异常 | Host 与 Slave 使用的 ESP-Hosted 版本不一致，建议保持同版本 |
+| SDIO 无法启动 | SDIO 对硬件要求严格，需检查外部上拉电阻、线长和电气条件 |
 
-文档给出的命令是：
+---
 
-```bash
-esptool.py -p <host_serial_port> --before default_reset --after no_reset run
-```
+### 14.6 分阶段推进建议
 
-### 14.6 OTA 是干什么的，什么时候用
+由于 Host 是非 ESP 芯片，Slave 与 Host 两侧可以独立推进，无需同时就绪：
 
-`examples/host_performs_slave_ota/README.md` 说明得很清楚：
+1. **阶段一（Slave 先行）**：按上文步骤编译烧录 ESP32-C5 slave 固件，通过串口日志确认固件正常启动，SPI 处于等待状态。此阶段完全不依赖 Host。
 
-- OTA 主要用于“后续更新 slave 固件”
-- 不是第一次 bring-up 最简单的方式
+2. **阶段二（Host 独立开发）**：在蓝牙音频芯片侧独立实现 SPI 主机驱动及 ESP-Hosted 协议层，参考第 16 节。
 
-也就是说更推荐这样理解：
+3. **阶段三（联合调试）**：接上 SPI 线，由蓝牙音频芯片主动发起 RPC 请求，驱动 ESP32-C5 开启热点，验证手机能否搜到并连接。
 
-- 第一次上电、第一次装系统：优先用串口直刷 slave
-- 之后量产或远程升级：再用 OTA
-
-该示例支持三种 OTA 来源：
-
-- LittleFS
-- Host 分区
-- HTTPS
-
-它们的共同前提都是：你已经先编出了 slave 的固件文件，例如：
-
-```text
-slave/build/network_adapter.bin
-```
-
-然后再把这个 `.bin` 放到 OTA 示例需要的位置。
-
-例如 Host Partition 方式中，文档给的是：
-
-```bash
-cp slave/build/network_adapter.bin examples/host_performs_slave_ota/components/ota_partition/slave_fw_bin/
-```
-
-### 14.7 烧录时最容易踩的坑
-
-结合 `docs/troubleshooting.md`，最常见的问题有这些：
-
-#### 1. Host 和 Slave 版本不一致
-
-文档建议主从最好使用同版本的 ESP-Hosted。
-
-否则即使都能编过，也可能因为协议或实现差异导致互不兼容。
-
-#### 2. Host 和 Slave 的 transport 不一致
-
-例如：
-
-- slave 选了 `SDIO`
-- host 却按 `SPI` 配
-
-这种情况下肯定连不上。
-
-#### 3. GPIO 配置和实际接线不一致
-
-这也是最常见的问题之一。尤其在 SPI/SDIO 下，哪怕只错一根线，都可能表现为“死活连不上”。
-
-#### 4. SDIO 硬件条件不满足
-
-文档对 SDIO 的要求非常严格，尤其包括：
-
-- 外部上拉
-- 更短的连线
-- 更干净的信号
-- 合适的电源与地线
-
-如果 SDIO 起不来，不一定是软件问题，很可能是硬件链路问题。
-
-#### 5. SPI 信号质量不好
-
-如果日志出现 `drop pkt` 之类错误，文档建议先降 SPI 时钟，再检查布线和信号完整性。
-
-### 14.8 一个最实用的上手建议
-
-如果你只是刚接触这个仓库，推荐按下面顺序来：
-
-1. 先选一块 host 和一块 ESP slave
-2. 优先用 `SPI Full Duplex` 跑通基础通信
-3. 确认 host/slave 都能正常启动并互相识别
-4. 再根据性能需求切换到 `SDIO`
-5. 最后再考虑 OTA、Network Split、Power Save 等进阶功能
-
-这样成功率通常最高。
+> **注意**：ESP-Hosted slave 固件不会自动开热点，必须由 Host 通过 SPI 发送 RPC 命令触发。单独给 Slave 上电时，手机看不到热点是正常的。
 
 ## 15. 专门说明：ESP32-C5 作为无线协处理器，使用 SPI 与非 ESP Host 通信
 
@@ -1619,4 +1522,119 @@ Host 返回：
 - `ESP32-C5` 通过 SPI 分块向 Host 取录音数据
 - 客户端通过局域网直接从 `ESP32-C5` 下载文件
 
-这样能最快把“录音文件通过热点传输”这个核心目标跑通。
+这样能最快把”录音文件通过热点传输”这个核心目标跑通。
+
+## 19. 和以前用 AT 指令固件有什么不一样
+
+### 19.1 先回顾”AT 指令固件”是怎么工作的
+
+你之前用 STM32 控制 ESP32 的方式，是这套经典模式：
+
+1. 从乐鑫官网下载一份**预编译好的 AT 固件**（`.bin` 文件）
+2. 用烧录工具直接把它写进 ESP32，不需要自己编译
+3. STM32 通过 **UART 串口**给 ESP32 发**文本命令**，例如：
+   - `AT+CWJAP=”MyWiFi”,”password”` — 连 Wi‑Fi
+   - `AT+MQTTCONN=...` — 连 MQTT 服务器
+4. ESP32 执行命令，回复 `OK` 或数据
+
+这种方式的本质是：**ESP32 是一个黑盒命令解释器，主控只需要发字符串。**
+
+---
+
+### 19.2 这个仓库和 AT 固件有什么根本区别
+
+**核心区别只有一句话：**
+
+> AT 固件 = 主控发文本命令，ESP 解释执行。
+> ESP-Hosted-MCU = 主控调用 API 函数，这些调用被序列化成二进制包通过 SPI/SDIO 发给 ESP 执行。
+
+展开来说，两者在每一个环节上都不同：
+
+| 对比维度 | AT 固件方式 | ESP-Hosted-MCU 方式 |
+|---|---|---|
+| 固件来源 | 官网下载预编译包，直接烧录 | 从这个 git 仓库编译，自己烧录 |
+| 主控与 ESP 的交互协议 | 文本 AT 命令（`AT+CWJAP=...`） | 二进制 RPC（protobuf 编码） |
+| 通信总线 | 通常只用 UART | SPI / SDIO / UART 均可 |
+| 主控侧 API | 发字符串、解析回显 | 调用标准 ESP-IDF Wi‑Fi 函数 |
+| 可定制程度 | AT 命令集固定，无法扩展 | 开源，可以增加自定义 RPC 命令 |
+| 事件处理 | 轮询回显或 URC 字符串 | 标准事件回调（结构化数据） |
+| 吞吐能力 | UART 上限（通常 1 Mbps 以下） | SPI/SDIO 可达 20~79 Mbps |
+
+---
+
+### 19.3 烧录完之后，主控还是发 AT 指令吗
+
+**不是。**
+
+这是最容易误解的地方。
+
+烧录 ESP-Hosted-MCU slave 固件之后，ESP32/C5/C6 不再是一个 AT 指令解释器。它变成了一个 **RPC 服务端**。
+
+主控和它的交互方式完全变了：
+
+- **AT 固件：** STM32 → UART → `AT+CWJAP=”ssid”,”pass”\r\n` → ESP32 回 `OK`
+- **ESP-Hosted-MCU：** Host → SPI → `[protobuf 编码的 WifiConnect 请求包]` → ESP32 执行并回 `[protobuf 编码的响应包]`
+
+主控侧写的不是字符串拼接逻辑，而是调用 API 函数，例如：
+
+```c
+esp_wifi_connect();        // 这个函数调用会被 ESP-Hosted 打包成 RPC 发给 ESP
+```
+
+这个函数在 Host 端是一个”弱函数”实现（`esp_wifi_weak.c`），内部把调用序列化成 protobuf，通过 SPI 发出去，再把响应反序列化回来返回给你。
+
+对应用代码来说，感觉像是在本地调用 Wi‑Fi API，但实际上背后是 RPC。
+
+---
+
+### 19.4 自由度更高在哪里
+
+比 AT 固件方式自由度确实高很多，主要体现在三点：
+
+#### 1. API 更完整
+
+AT 命令集是一个有限的文本接口，乐鑫实现了哪些就只有哪些。
+
+ESP-Hosted-MCU 暴露的是完整的 **ESP-IDF Wi‑Fi API**，包括：
+
+- 完整的扫描接口（获取结构化 AP 列表，而不是解析字符串）
+- 细粒度的连接控制（可以设置 BSSID、信道、协议等）
+- 所有标准 Wi‑Fi 事件（`WIFI_EVENT_STA_CONNECTED`、`IP_EVENT_STA_GOT_IP` 等以结构体形式到达）
+
+#### 2. 可以扩展自定义命令
+
+AT 固件不能加新命令（除非用乐鑫定制版，但那是另一套开发流程）。
+
+ESP-Hosted-MCU 是开源的，你可以在 `.proto` 文件里加新的 RPC 消息类型，在 slave 侧加对应处理逻辑，Host 侧加对应调用——相当于给这套框架打桩加功能。
+
+#### 3. 传输带宽更高
+
+AT 固件通常跑在 UART 上，实测吞吐通常只有几百 kbps 到 1 Mbps 量级。
+
+ESP-Hosted-MCU 走 SPI 可以达到 20+ Mbps，走 SDIO 可以到 50~79 Mbps，适合真正的数据传输场景。
+
+---
+
+### 19.5 那 AT 固件还有没有价值
+
+有。两种方式不是谁替代谁，而是适合不同场景：
+
+| 场景 | 更适合哪种方式 |
+|---|---|
+| 快速验证联网功能，Host 侧只需要简单脚本 | AT 固件 |
+| Host 是资源极为有限的单片机，不想移植驱动 | AT 固件 |
+| 只需要 MQTT / HTTP 联网，功能固定 | AT 固件 |
+| Host 需要完整 Wi‑Fi 事件、扫描结果等结构化数据 | ESP-Hosted-MCU |
+| 需要 SPI/SDIO 高带宽传输（如传文件、传音频流） | ESP-Hosted-MCU |
+| Host 不是 ESP，但想复用 ESP-IDF Wi‑Fi API | ESP-Hosted-MCU |
+| 需要自定义扩展命令 | ESP-Hosted-MCU |
+
+你们现在的场景——蓝牙音频芯片通过 SPI 连接 ESP32-C5 传录音文件——显然属于后者。AT 固件走 UART 的带宽完全不够用，而且 AT 命令集也没有”Host 主动传数据给 ESP，再由 ESP 通过热点发出去”的能力。
+
+---
+
+### 19.6 一句话总结这两种方式的本质差异
+
+- **AT 固件：** ESP32 是一个受主控文本命令驱动的”网络模组”，主控发什么命令，ESP 就干什么，主控不需要了解 Wi‑Fi 内部细节。
+
+- **ESP-Hosted-MCU：** ESP32/C5/C6 是一个 Wi‑Fi/蓝牙协处理器，主控通过 SPI/SDIO 调用完整的 Wi‑Fi API，拥有更高的控制权、更丰富的事件信息和更高的传输带宽，但主控侧需要移植对应的 Host 驱动。
