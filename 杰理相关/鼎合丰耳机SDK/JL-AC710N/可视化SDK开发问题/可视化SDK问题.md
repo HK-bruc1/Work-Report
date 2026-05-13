@@ -4970,3 +4970,35 @@ __exit:
 }
 ```
 
+# 电量形式接口
+
+**1. 电压值**
+
+- get_vbat_value：获取当前电池电压值
+
+**2. 精确到 1% 的百分比**
+
+- get_vbat_percent：获取本机当前电量百分比，范围 0 到 100，会有 97、98 这种值
+- get_tws_sibling_bat_persent：获取副耳同步过来的电量值
+  说明：
+  这个名字虽然叫 percent，但副耳这个值在同步时可能会复用高位做充电状态标记，所以它不一定总是纯 0 到 100
+
+**3. 0 到 9 档位**
+
+- get_self_battery_level：获取本机当前电量档位，范围 0 到 9
+- get_cur_battery_level：获取当前最终用于显示/上报的电量档位；TWS 场景下会结合副耳一起决定
+- get_tws_sibling_bat_level：获取副耳同步过来的 0 到 9 档位
+
+**4. 整十值，10/20/30/…/100**
+
+- 这套代码里没有一个统一固定的公共接口专门返回整十值
+- 常见做法是用 get_self_battery_level 换算：档位 × 10 + 10
+- 所以 0 档对应 10，9 档对应 100
+
+**5. 模块内部换算函数**
+
+- get_vbat_voltage：底层采样电压，模块内部使用
+- battery_calc_percent：把电压换算成百分比
+- battery_value_to_phone_level：把百分比换算成 0 到 9 档位
+- tws_sync_bat_level：把本机电量同步给对耳
+
