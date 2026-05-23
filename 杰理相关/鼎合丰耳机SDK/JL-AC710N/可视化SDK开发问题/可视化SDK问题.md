@@ -5002,3 +5002,94 @@ __exit:
 - battery_value_to_phone_level：把百分比换算成 0 到 9 档位
 - tws_sync_bat_level：把本机电量同步给对耳
 
+# 库日志开关
+
+**杰理（JL）芯片的闭源库日志基本都是在 `apps/earphone/log_config/` 目录下的这些配置文件里统一开关的。**
+
+## 日志系统的整体架构
+
+从 `interface/utils/debug.h` 可以看到，杰理实现了一套 **tag-based 分级日志系统**：
+
+```
+// 声明外部常量
+#define _LOG_TAG_CONST_DECLARE(level, name)  extern const char log_tag_const_##level##_##name
+
+// 运行时判断是否开启
+#define ___LOG_IS_ENABLE(level, name)        (log_tag_const_##level##_##name)
+```
+
+库代码里通过定义 `LOG_TAG_CONST` 宏来给自己"打标签"，比如 SD 驱动内部会这样写：
+
+```
+#define LOG_TAG_CONST    SD
+#include "debug.h"
+
+log_info("send cmd0, arg=%x", arg);   // 实际变成 if (log_tag_const_i_SD) { ... }
+```
+
+然后编译成库时，这些 `log_tag_const_*` 符号是**未定义的外部引用**，链接时由你在 `lib_xxx_config.c` 中提供的常量来填充。
+
+------
+
+## `log_config` 目录下有哪些配置文件？
+
+```
+apps/earphone/log_config/
+├── app_config.c           ← 应用层（你自己的代码）
+├── lib_btctrler_config.c  ← 蓝牙控制器库（.a 闭源）
+├── lib_btstack_config.c   ← 蓝牙协议栈库（.a 闭源）
+├── lib_driver_config.c    ← 驱动库（SD/USB/时钟/GPIO 等，.a 闭源）
+├── lib_media_config.c     ← 媒体/音频编解码库（.a 闭源）
+├── lib_net_config.c       ← 网络库（.a 闭源）
+├── lib_system_config.c    ← 系统库（.a 闭源）
+└── lib_update_config.c    ← OTA 升级库（.a 闭源）
+```
+
+**闭源库对应的日志开关就在对应的 `lib_xxx_config.c` 里。**
+
+------
+
+## 怎么确认某个库的 tag 在哪个文件里？
+
+以 `sdk.elf.resolution.txt` 中的链接记录为例：
+
+```
+-r=objs/apps/common/device/usb/device/uac1.c.o,log_tag_const_d_USB,l
+-r=objs/apps/common/device/usb/device/uac1.c.o,log_tag_const_i_USB,l
+-r=objs/apps/earphone/log_config/app_config.c.o,log_tag_const_v_SETUP,pl
+-r=objs/apps/earphone/log_config/lib_driver_config.c.o,log_tag_const_e_SD,pl
+```
+
+这明确说明：
+
+- `log_tag_const_*_USB` → 在 `lib_driver_config.c` 里定义
+- `log_tag_const_*_SETUP` → 在 `app_config.c` 里定义
+- `log_tag_const_*_SD` → 在 `lib_driver_config.c` 里定义
+
+------
+
+## 一个文件里长什么样？
+
+以 `lib_driver_config.c` 为例，每个模块有 5~6 个级别：
+
+```
+const char log_tag_const_v_SD  = CONFIG_DEBUG_LIB(FALSE);  // Verbose
+const char log_tag_const_i_SD  = CONFIG_DEBUG_LIB(FALSE);  // Info
+const char log_tag_const_d_SD  = CONFIG_DEBUG_LIB(FALSE);  // Debug
+const char log_tag_const_w_SD  = CONFIG_DEBUG_LIB(FALSE);  // Warning
+const char log_tag_const_e_SD  = CONFIG_DEBUG_LIB(FALSE);  // Error
+```
+
+把 `FALSE` 改成 `TRUE`，对应级别的日志就打开了。
+
+------
+
+## 总结
+
+| 问题                         | 答案                                                         |
+| :--------------------------- | :----------------------------------------------------------- |
+| 闭源库日志都在这里开吗？     | **基本都是**。按库的类型分到不同的 `lib_xxx_config.c` 文件里 |
+| 怎么知道某个模块在哪个文件？ | 看 tag 名字猜（`_SD` 在 driver，`_USB` 在 driver，`_APP_CHARGE` 在 app_config 或 driver），或者查 `sdk.elf.resolution.txt` |
+| 为什么 SD 失败没日志？       | `lib_driver_config.c` 里 `log_tag_const_*_SD` 全是 `FALSE`，库内部的 `log_info`/`log_error` 都被静默跳过了 |
+
+**你现在要做的就是改 `lib_driver_config.c`，把 SD 相关的 5 个级别至少改成 `TRUE`，重新编译后就能看到底层库的大量调试信息了。**
