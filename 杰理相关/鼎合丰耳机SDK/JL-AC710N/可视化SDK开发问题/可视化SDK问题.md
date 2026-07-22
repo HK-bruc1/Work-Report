@@ -1903,6 +1903,7 @@ struct tone_files {
 在对应的中英文处添加路径
 
 - 其实我是没有找到这个路径的
+- **apps\earphone\audio\tone_table.c**
 
 ```c
 static const struct tone_files chinese_tone_files = {
@@ -2019,6 +2020,7 @@ static const struct tone_files english_tone_files = {
 在对应位置调用接口即可。
 
 - `play_tone_file(get_tone_files()->_TONE_KEY_ACTION_DOUBLE_CLICK_NAME);`
+- `tws_play_tone_file(get_tone_files()->bt_connect, 400);`
 
 ## 出仓需要开机提示音
 
